@@ -21,7 +21,11 @@ import {
   CreditCard,
   Building2,
   RefreshCw,
-  Filter
+  Filter,
+  Plus,
+  Edit,
+  Shield,
+  Trash2
 } from 'lucide-react';
 import {
   initialCommissionList,
@@ -88,8 +92,7 @@ export const CommissionPage: React.FC = () => {
       const pendingCount = jOrders.length > 0 ? pendingOrdersCount : Math.max(0, totalOrdersCount - completedCount);
       const commissionRate = 100;
       
-      // Dynamic cumulative commission: DO NOT REMOVE IF ORDERS ARE REMOVED
-      // Math.max between live delivered order commission and any stored / historical earnings
+      // Dynamic cumulative commission
       const liveDeliveredEarnings = completedCount * commissionRate;
       const recordedEarnings = Number(j.totalEarnings ?? j.commission ?? j.accumulatedCommission ?? 0);
       const totalCommission = Math.max(recordedEarnings, liveDeliveredEarnings);
@@ -159,7 +162,7 @@ export const CommissionPage: React.FC = () => {
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<'Commission List' | 'Joiner Wallets' | 'Payment History' | 'Payout Requests'>('Commission List');
 
-  // Selected Joiner for Right Drawer
+  // Selected Joiner
   const [selectedJoinerId, setSelectedJoinerId] = useState<number | string>(1);
   const activeJoiner = commissionList.find(j => String(j.id) === String(selectedJoinerId)) || commissionList[0];
 
@@ -171,22 +174,20 @@ export const CommissionPage: React.FC = () => {
   const [joinerFilter, setJoinerFilter] = useState<string>('All Joiners');
   const [statusFilter, setStatusFilter] = useState<string>('All Status');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [dateRange, setDateRange] = useState<string>('11 Sep 2026 - 11 Sep 2026');
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
 
-  // Checkbox selection
+  // Selected IDs for Bulk Actions
   const [selectedIds, setSelectedIds] = useState<(number | string)[]>([]);
 
-  // Modals state
-  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState<boolean>(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  // Modals
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Success notification
+  // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -194,37 +195,31 @@ export const CommissionPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Distinct Zones
-  const zones = useMemo(() => {
-    const list = Array.from(new Set(commissionList.map(j => j.zone)));
-    return ['All Zones', ...list];
-  }, [commissionList]);
-
-  // Distinct Joiners
-  const joinerNames = useMemo(() => {
-    return ['All Joiners', ...commissionList.map(j => j.name)];
-  }, [commissionList]);
+  // Zones & Joiners filter options
+  const zones = useMemo(() => ['All Zones', ...Array.from(new Set(commissionList.map(j => j.zone)))], [commissionList]);
+  const joinerNames = useMemo(() => ['All Joiners', ...Array.from(new Set(commissionList.map(j => j.name)))], [commissionList]);
 
   // Filtered List
   const filteredList = useMemo(() => {
-    return commissionList.filter(item => {
-      const matchZone = zoneFilter === 'All Zones' || item.zone === zoneFilter;
-      const matchJoiner = joinerFilter === 'All Joiners' || item.name === joinerFilter;
-      const matchStatus = statusFilter === 'All Status' || item.status === statusFilter;
-      const matchSearch =
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.mobile.includes(searchTerm) ||
-        item.zone.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchZone && matchJoiner && matchStatus && matchSearch;
+    return commissionList.filter(j => {
+      const matchesZone = zoneFilter === 'All Zones' || j.zone === zoneFilter;
+      const matchesJoiner = joinerFilter === 'All Joiners' || j.name === joinerFilter;
+      const matchesStatus = statusFilter === 'All Status' || j.status === statusFilter;
+      const matchesSearch =
+        searchTerm === '' ||
+        j.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        j.mobile.includes(searchTerm);
+
+      return matchesZone && matchesJoiner && matchesStatus && matchesSearch;
     });
   }, [commissionList, zoneFilter, joinerFilter, statusFilter, searchTerm]);
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredList.length / itemsPerPage) || 1;
+  // Paginated List
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / itemsPerPage));
   const paginatedList = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredList.slice(start, start + itemsPerPage);
-  }, [filteredList, currentPage]);
+  }, [filteredList, currentPage, itemsPerPage]);
 
   const startIndex = (currentPage - 1) * itemsPerPage + 1;
   const endIndex = Math.min(currentPage * itemsPerPage, filteredList.length);
@@ -244,9 +239,9 @@ export const CommissionPage: React.FC = () => {
     );
   };
 
-  // Export CSV function
+  // CSV Export
   const handleExportCSV = () => {
-    const headers = ["#", "Joiner Name", "Mobile", "Zone", "Total Orders", "Completed Orders", "Pending Orders", "Commission Rate", "Total Commission", "Paid Amount", "Pending Amount", "Status"];
+    const headers = ["ID", "Name", "Mobile", "Zone", "Total Orders", "Delivered Orders", "Pending Orders", "Rate", "Total Commission", "Paid Amount", "Pending Payout", "Status"];
     const rows = filteredList.map(j => [
       j.id,
       `"${j.name}"`,
@@ -272,7 +267,7 @@ export const CommissionPage: React.FC = () => {
     showToast('Exported Commission List to CSV successfully!');
   };
 
-  // Payment Success Handler - Live deduction and Firestore persistence
+  // Payment Success Handler
   const handlePaymentSuccess = async (joinerId: number | string, amount: number, mode: string, txnRef: string) => {
     const targetJoiner = commissionList.find(j => String(j.id) === String(joinerId)) || payoutTargetJoiner || activeJoiner;
     const targetName = targetJoiner?.name || 'Joiner';
@@ -407,8 +402,6 @@ export const CommissionPage: React.FC = () => {
   const paidCommissionSum = commissionList.reduce((sum, j) => sum + (Number(j.paidAmount) || 0), 0);
   const pendingCommissionSum = commissionList.reduce((sum, j) => sum + (Number(j.pendingAmount) || 0), 0);
   const totalJoinersCount = isDatabaseConnected ? joiners.length : (joiners.length || commissionList.length);
-  const paidPercentage = totalCommissionSum > 0 ? Math.round((paidCommissionSum / totalCommissionSum) * 100) : 0;
-  const pendingPercentage = totalCommissionSum > 0 ? Math.round((pendingCommissionSum / totalCommissionSum) * 100) : 0;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-5">
@@ -420,817 +413,738 @@ export const CommissionPage: React.FC = () => {
         </div>
       )}
 
-      {/* Header 4 Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
-        {/* Total Commission */}
-        <div className="bg-emerald-50/90 p-4 rounded-xl border border-emerald-100/90 flex items-center gap-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
-            <CircleDollarSign className="w-6 h-6" />
+      {/* Top 6 KPI Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-center">
+        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+            <CircleDollarSign className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500">Total Commission</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 leading-none mt-1">₹{totalCommissionSum.toLocaleString('en-IN')}</h3>
-            <p className="text-[10px] text-emerald-700 font-semibold mt-1">Total earned</p>
+            <p className="text-[11px] font-semibold text-slate-500">Total Commission</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹{totalCommissionSum.toLocaleString('en-IN')}</h3>
           </div>
         </div>
 
-        {/* Paid Commission */}
-        <div className="bg-sky-50/90 p-4 rounded-xl border border-sky-100/90 flex items-center gap-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-xs">
-            <Wallet className="w-6 h-6" />
+        <div className="bg-sky-50/80 p-3.5 rounded-xl border border-sky-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold">
+            <Wallet className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500">Paid Commission</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 leading-none mt-1">₹{paidCommissionSum.toLocaleString('en-IN')}</h3>
-            <p className="text-[10px] text-sky-700 font-semibold mt-1">{paidPercentage}% of total</p>
+            <p className="text-[11px] font-semibold text-slate-500">Paid Commission</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹{paidCommissionSum.toLocaleString('en-IN')}</h3>
           </div>
         </div>
 
-        {/* Pending Commission */}
-        <div className="bg-amber-50/90 p-4 rounded-xl border border-amber-100/90 flex items-center gap-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs">
-            <Clock className="w-6 h-6" />
+        <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500">Pending Commission</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 leading-none mt-1">₹{pendingCommissionSum.toLocaleString('en-IN')}</h3>
-            <p className="text-[10px] text-amber-700 font-semibold mt-1">{pendingPercentage}% of total</p>
+            <p className="text-[11px] font-semibold text-slate-500">Pending Commission</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹{pendingCommissionSum.toLocaleString('en-IN')}</h3>
           </div>
         </div>
 
-        {/* Total Joiners */}
-        <div className="bg-purple-50/90 p-4 rounded-xl border border-purple-100/90 flex items-center gap-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs">
-            <Users className="w-6 h-6" />
+        <div className="bg-purple-50/80 p-3.5 rounded-xl border border-purple-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold">
+            <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500">Total Joiners</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 leading-none mt-1">{totalJoinersCount}</h3>
-            <p className="text-[10px] text-purple-700 font-semibold mt-1">Active fleet</p>
+            <p className="text-[11px] font-semibold text-slate-500">Total Joiners</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{totalJoinersCount}</h3>
           </div>
+        </div>
+
+        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold">
+            <CreditCard className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500">Commission Rate</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹100 / order</h3>
+          </div>
+        </div>
+
+        <div>
+          <button
+            onClick={() => {
+              setPayoutTargetJoiner(activeJoiner);
+              setIsPayoutModalOpen(true);
+            }}
+            className="w-full h-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          >
+            <Send className="w-4 h-4" /> Make Payout
+          </button>
         </div>
       </div>
 
-      {/* Main Grid: Left Table/Sub-Tab (8 cols) + Right Detail Drawer (4 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (8 cols) */}
-        <div className="lg:col-span-8 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-          {/* 4 Sub-Tabs */}
-          <div className="flex items-center gap-4 border-b border-slate-200 text-xs font-bold text-slate-600 overflow-x-auto">
-            {(['Commission List', 'Joiner Wallets', 'Payment History', 'Payout Requests'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => {
-                  setActiveTab(tab);
-                  setCurrentPage(1);
-                }}
-                className={`pb-2.5 transition-all whitespace-nowrap cursor-pointer ${
-                  activeTab === tab
-                    ? 'text-emerald-700 border-b-2 border-emerald-700 font-extrabold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {tab}
-                {tab === 'Payout Requests' && payoutRequests.filter(r => r.status === 'Pending').length > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] rounded-full">
-                    {payoutRequests.filter(r => r.status === 'Pending').length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* TAB 1: COMMISSION LIST */}
-          {activeTab === 'Commission List' && (
-            <>
-              {/* Filter Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Zone Filter */}
-                  <select
-                    value={zoneFilter}
-                    onChange={(e) => {
-                      setZoneFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-medium text-slate-700 focus:outline-emerald-600"
-                  >
-                    {zones.map(z => <option key={z} value={z}>{z}</option>)}
-                  </select>
-
-                  {/* Joiner Filter */}
-                  <select
-                    value={joinerFilter}
-                    onChange={(e) => {
-                      setJoinerFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-medium text-slate-700 focus:outline-emerald-600"
-                  >
-                    {joinerNames.map(j => <option key={j} value={j}>{j}</option>)}
-                  </select>
-
-                  {/* Status Filter */}
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-medium text-slate-700 focus:outline-emerald-600"
-                  >
-                    <option value="All Status">All Status</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Paid">Paid</option>
-                  </select>
-
-                  {/* Search Input & Button */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search name/mobile..."
-                      value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="text-xs bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-2 py-1.5 text-slate-700 w-36 focus:w-44 transition-all focus:outline-emerald-600"
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => setCurrentPage(1)}
-                    className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
-                  >
-                    Search
-                  </button>
-
-                  {(zoneFilter !== 'All Zones' || joinerFilter !== 'All Joiners' || statusFilter !== 'All Status' || searchTerm !== '') && (
-                    <button
-                      onClick={() => {
-                        setZoneFilter('All Zones');
-                        setJoinerFilter('All Joiners');
-                        setStatusFilter('All Status');
-                        setSearchTerm('');
-                        setCurrentPage(1);
-                      }}
-                      className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 relative">
-                  {/* Date Range Button */}
-                  <button
-                    onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                    className="text-xs border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg px-3 py-1.5 text-slate-700 font-medium flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>📅 {dateRange}</span>
-                  </button>
-
-                  {/* Date Picker Popover */}
-                  {isDatePickerOpen && (
-                    <div className="absolute right-0 top-10 z-30 bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-64 space-y-2 text-xs">
-                      <p className="font-bold text-slate-800">Select Date Preset</p>
-                      {[
-                        '11 Sep 2026 - 11 Sep 2026',
-                        '01 Sep 2026 - 11 Sep 2026',
-                        'Last 7 Days (04-11 Sep 2026)',
-                        'All Time / Lifetime'
-                      ].map(range => (
-                        <button
-                          key={range}
-                          onClick={() => {
-                            setDateRange(range);
-                            setIsDatePickerOpen(false);
-                            showToast(`Filtered for: ${range}`);
-                          }}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg font-medium transition-colors ${
-                            dateRange === range ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          {range}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Export Button */}
-                  <button
-                    onClick={handleExportCSV}
-                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Export
-                  </button>
-                </div>
-              </div>
-
-              {/* Bulk Action Banner */}
-              {selectedIds.length > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs animate-in fade-in">
-                  <span className="font-bold text-emerald-900">
-                    {selectedIds.length} joiner(s) selected
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleBulkPay}
-                      className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-2xs"
-                    >
-                      Bulk Pay Commission
-                    </button>
-                    <button
-                      onClick={() => setSelectedIds([])}
-                      className="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg"
-                    >
-                      Deselect
-                    </button>
-                  </div>
-                </div>
+      {/* Full-width Commission Management Section (No Slider) */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        {/* 4 Sub-Tabs */}
+        <div className="flex items-center gap-4 border-b border-slate-200 text-xs font-bold text-slate-600 overflow-x-auto pb-1">
+          {(['Commission List', 'Joiner Wallets', 'Payment History', 'Payout Requests'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setCurrentPage(1);
+              }}
+              className={`pb-2 transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === tab
+                  ? 'text-emerald-700 border-b-2 border-emerald-700 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab}
+              {tab === 'Payout Requests' && payoutRequests.filter(r => r.status === 'Pending').length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[10px] rounded-full">
+                  {payoutRequests.filter(r => r.status === 'Pending').length}
+                </span>
               )}
+            </button>
+          ))}
+        </div>
 
-              {/* Table Title */}
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-slate-800">
-                  Joiner Commission List ({filteredList.length})
-                </h4>
-                <span className="text-[11px] text-slate-500">
-                  Rate: <strong className="text-emerald-700">₹100</strong> per delivered order
+        {/* TAB 1: COMMISSION LIST */}
+        {activeTab === 'Commission List' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Joiner Commission List</h3>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
+                  {filteredList.length} {filteredList.length === 1 ? 'Joiner' : 'Joiners'}
                 </span>
               </div>
 
-              {/* Commission List Table */}
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <div className="relative w-full sm:w-44 shrink-0">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search name/mobile..."
+                    value={searchTerm}
+                    onChange={e => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                  />
+                </div>
+
+                <select
+                  value={zoneFilter}
+                  onChange={e => {
+                    setZoneFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+                >
+                  {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={e => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+                >
+                  <option value="All Status">All Status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Paid">Paid</option>
+                </select>
+
+                <button
+                  onClick={handleExportCSV}
+                  className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer transition-colors shrink-0"
+                  title="Export Commission CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Export</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPayoutTargetJoiner(activeJoiner);
+                    setIsPayoutModalOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+                >
+                  <Send className="w-3.5 h-3.5" /> Make Payout
+                </button>
+              </div>
+            </div>
+
+            {/* Bulk Action Banner */}
+            {selectedIds.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs animate-in fade-in">
+                <span className="font-bold text-emerald-900">
+                  {selectedIds.length} joiner(s) selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBulkPay}
+                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-2xs cursor-pointer"
+                  >
+                    Bulk Pay Commission
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds([])}
+                    className="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg cursor-pointer"
+                  >
+                    Deselect
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Table */}
+            {filteredList.length === 0 ? (
+              <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                <p className="text-xs font-semibold text-slate-700">No joiners match your filter criteria.</p>
+                <button
+                  onClick={() => {
+                    setZoneFilter('All Zones');
+                    setJoinerFilter('All Joiners');
+                    setStatusFilter('All Status');
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            ) : (
+              <div className="w-full">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold select-none">
-                      <th className="py-2.5 px-3">
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold select-none">
+                      <th className="py-2.5 px-2 w-8 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIds.length > 0 && selectedIds.length === paginatedList.length}
                           onChange={handleSelectAll}
-                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                          className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                         />
                       </th>
-                      <th className="py-2.5 px-2">#</th>
-                      <th className="py-2.5 px-3">Joiner Name</th>
-                      <th className="py-2.5 px-3">Mobile</th>
-                      <th className="py-2.5 px-3">Zone</th>
-                      <th className="py-2.5 px-2 text-center" title="Total orders assigned">Total Orders</th>
-                      <th className="py-2.5 px-2 text-center text-emerald-800" title="Delivered & commission earned">Completed Orders</th>
-                      <th className="py-2.5 px-2 text-center text-amber-700" title="Awaiting delivery / in progress (not included in completed commission)">Pending Orders</th>
-                      <th className="py-2.5 px-2 text-right">Total Commission</th>
-                      <th className="py-2.5 px-2 text-right">Paid</th>
-                      <th className="py-2.5 px-2 text-right">Pending</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
-                      <th className="py-2.5 px-3 text-center">Actions</th>
+                      <th className="py-2.5 px-2 w-8 text-center whitespace-nowrap">#</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Joiner Name</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Mobile</th>
+                      <th className="py-2.5 px-2.5 whitespace-nowrap">Zone</th>
+                      <th className="py-2.5 px-2 text-center whitespace-nowrap">Total Orders</th>
+                      <th className="py-2.5 px-2 text-center text-emerald-800 whitespace-nowrap">Completed</th>
+                      <th className="py-2.5 px-2 text-center text-amber-700 whitespace-nowrap">Pending Orders</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Total Comm</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Paid</th>
+                      <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Pending</th>
+                      <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Status</th>
+                      <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {paginatedList.length > 0 ? (
-                      paginatedList.map(j => {
-                        const isSelected = selectedJoinerId === j.id;
-                        const isChecked = selectedIds.includes(j.id);
-                        const completedCount = j.completedOrders ?? j.deliveredOrders ?? 0;
-                        const pendingCount = j.pendingOrders ?? Math.max(0, j.totalOrders - completedCount);
-                        return (
-                          <tr
-                            key={j.id}
-                            onClick={() => setSelectedJoinerId(j.id)}
-                            className={`cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-emerald-50/80 border-l-4 border-l-emerald-600 font-medium'
-                                : isChecked
-                                ? 'bg-emerald-50/30'
-                                : 'hover:bg-slate-50/80'
-                            }`}
-                          >
-                            <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => handleToggleRow(j.id)}
-                                className="rounded text-emerald-600 focus:ring-emerald-500"
+                    {paginatedList.map((j, idx) => {
+                      const isSelected = selectedJoinerId === j.id;
+                      const isChecked = selectedIds.includes(j.id);
+                      const completedCount = j.completedOrders ?? j.deliveredOrders ?? 0;
+                      const pendingCount = j.pendingOrders ?? Math.max(0, j.totalOrders - completedCount);
+                      return (
+                        <tr
+                          key={j.id}
+                          onClick={() => setSelectedJoinerId(j.id)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-emerald-50/80 font-semibold'
+                              : isChecked
+                              ? 'bg-emerald-50/30'
+                              : 'hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleRow(j.id)}
+                              className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-medium text-slate-500 whitespace-nowrap">
+                            {(currentPage - 1) * itemsPerPage + idx + 1}
+                          </td>
+                          <td className="py-2.5 px-2.5 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={j.avatar}
+                                alt={j.name}
+                                className="w-6 h-6 rounded-full object-cover border border-slate-200"
                               />
-                            </td>
-                            <td className="py-2.5 px-2 font-medium text-slate-500 font-mono text-[11px]">{j.id}</td>
-                            <td className="py-2.5 px-3">
-                              <div className="flex items-center gap-2">
-                                <img
-                                  src={j.avatar}
-                                  alt={j.name}
-                                  className="w-7 h-7 rounded-full object-cover border border-slate-200"
-                                />
-                                <div>
-                                  <span className="font-bold text-slate-800 hover:text-emerald-700 block">
-                                    {j.name}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">₹{j.commissionRate}/delivered order</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{j.mobile}</td>
-                            <td className="py-2.5 px-3 text-slate-700 font-medium">{j.zone}</td>
-                            <td className="py-2.5 px-2 text-center font-bold text-slate-800">
-                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px]">
-                                {j.totalOrders}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-2 text-center font-bold text-emerald-800">
-                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-mono text-[11px]">
-                                {completedCount}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-2 text-center font-bold text-amber-800">
-                              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-mono text-[11px]">
-                                {pendingCount}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-2 text-right font-extrabold text-slate-900 font-mono">
-                              ₹{j.commission.toLocaleString('en-IN')}
-                            </td>
-                            <td className="py-2.5 px-2 text-right font-bold text-emerald-700 font-mono">
-                              ₹{j.paidAmount.toLocaleString('en-IN')}
-                            </td>
-                            <td className="py-2.5 px-2 text-right font-bold text-amber-700 font-mono">
-                              ₹{j.pendingAmount.toLocaleString('en-IN')}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] inline-block ${
-                                  j.status === 'Paid'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
+                              <span className="font-bold text-slate-800">{j.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-2.5 text-slate-600 font-mono text-[11px] whitespace-nowrap">{j.mobile}</td>
+                          <td className="py-2.5 px-2.5 text-slate-700 font-medium whitespace-nowrap">{j.zone}</td>
+                          <td className="py-2.5 px-2 text-center font-bold text-slate-800 whitespace-nowrap">{j.totalOrders}</td>
+                          <td className="py-2.5 px-2 text-center font-bold text-emerald-800 whitespace-nowrap">{completedCount}</td>
+                          <td className="py-2.5 px-2 text-center font-bold text-amber-800 whitespace-nowrap">{pendingCount}</td>
+                          <td className="py-2.5 px-2.5 text-right font-black text-slate-900 whitespace-nowrap">
+                            ₹{j.commission.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-bold text-emerald-700 whitespace-nowrap">
+                            ₹{j.paidAmount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-bold text-amber-700 whitespace-nowrap">
+                            ₹{j.pendingAmount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              j.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {j.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setSelectedJoinerId(j.id);
+                                  setPayoutTargetJoiner(j);
+                                  setIsPayoutModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg cursor-pointer"
                               >
-                                {j.status}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedJoinerId(j.id);
-                                    setPayoutTargetJoiner(j);
-                                    setIsPayoutModalOpen(true);
-                                  }}
-                                  title="Pay Commission"
-                                  className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold cursor-pointer transition-colors"
-                                >
-                                  Pay
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedJoinerId(j.id);
-                                  }}
-                                  title="View Details"
-                                  className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={13} className="py-10 text-center text-slate-400 font-medium">
-                          No joiners match the selected filters.
-                        </td>
-                      </tr>
-                    )}
+                                Pay
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedJoinerId(j.id);
+                                  setIsHistoryModalOpen(true);
+                                }}
+                                className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
+                                title="Ledger"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+            )}
 
-              {/* Pagination Bar */}
-              <div className="flex items-center justify-between pt-2 text-xs text-slate-500 select-none">
+            {/* Pagination Bar */}
+            {filteredList.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between pt-2 text-xs text-slate-500 gap-3 border-t border-slate-100">
                 <span>
-                  Showing {filteredList.length > 0 ? startIndex : 0} to {endIndex} of {filteredList.length} joiners
+                  Showing {startIndex} to {endIndex} of {filteredList.length} joiners
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    className="p-1 rounded border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="p-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(page => (
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      className={`min-w-6 h-6 px-2 rounded text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 rounded font-bold text-xs cursor-pointer ${
                         currentPage === page
-                          ? 'bg-emerald-700 text-white shadow-2xs'
-                          : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'bg-emerald-700 text-white'
+                          : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
                       {page}
                     </button>
                   ))}
-
                   <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    className="p-1 rounded border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="p-1 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
+        )}
 
-          {/* TAB 2: JOINER WALLETS */}
-          {activeTab === 'Joiner Wallets' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-slate-800">Joiner Digital Wallets</h4>
-                <p className="text-xs text-slate-500">Live ledger balance available for instant withdrawal</p>
-              </div>
+        {/* TAB 2: JOINER WALLETS */}
+        {activeTab === 'Joiner Wallets' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-800">Joiner Digital Wallets</h4>
+              <p className="text-xs text-slate-500">Live ledger balance available for instant withdrawal</p>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                {commissionList.slice(0, 10).map(j => (
-                  <div
-                    key={j.id}
-                    onClick={() => setSelectedJoinerId(j.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                      selectedJoinerId === j.id
-                        ? 'border-emerald-500 bg-emerald-50/40 shadow-xs'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <img src={j.avatar} alt={j.name} className="w-8 h-8 rounded-full object-cover" />
-                        <div>
-                          <p className="font-bold text-slate-800">{j.name}</p>
-                          <p className="text-[10px] text-slate-500">{j.zone} Zone • {j.mobile}</p>
-                        </div>
-                      </div>
-                      <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                        ₹{j.walletBalance.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1 pt-2 text-[10px] text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              {commissionList.map(j => (
+                <div
+                  key={j.id}
+                  onClick={() => setSelectedJoinerId(j.id)}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    selectedJoinerId === j.id
+                      ? 'border-emerald-500 bg-emerald-50/40 shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <img src={j.avatar} alt={j.name} className="w-8 h-8 rounded-full object-cover" />
                       <div>
-                        <span className="text-slate-400 block">Total Earned</span>
-                        <strong className="text-slate-700">₹{j.commission.toLocaleString('en-IN')}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block">Paid</span>
-                        <strong className="text-emerald-700">₹{j.paidAmount.toLocaleString('en-IN')}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block">Pending</span>
-                        <strong className="text-amber-700">₹{j.pendingAmount.toLocaleString('en-IN')}</strong>
+                        <p className="font-bold text-slate-800">{j.name}</p>
+                        <p className="text-[10px] text-slate-500">{j.zone} Zone • {j.mobile}</p>
                       </div>
                     </div>
+                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                      ₹{j.walletBalance.toLocaleString('en-IN')}
+                    </span>
+                  </div>
 
-                    <div className="pt-2.5 flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedJoinerId(j.id);
-                          setIsPayoutModalOpen(true);
-                        }}
-                        className="flex-1 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg shadow-2xs"
-                      >
-                        Payout
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedJoinerId(j.id);
-                          setIsHistoryModalOpen(true);
-                        }}
-                        className="py-1 px-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[11px] rounded-lg"
-                      >
-                        Ledger
-                      </button>
+                  <div className="grid grid-cols-3 gap-1 pt-2 text-[10px] text-center">
+                    <div>
+                      <span className="text-slate-400 block">Total Earned</span>
+                      <strong className="text-slate-700">₹{j.commission.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Paid</span>
+                      <strong className="text-emerald-700">₹{j.paidAmount.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Pending</span>
+                      <strong className="text-amber-700">₹{j.pendingAmount.toLocaleString('en-IN')}</strong>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* TAB 3: PAYMENT HISTORY */}
-          {activeTab === 'Payment History' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-slate-800">Disbursement & Payment History</h4>
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1 bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1"
-                >
-                  <Download className="w-3.5 h-3.5" /> Export All
-                </button>
-              </div>
-
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
-                    <tr>
-                      <th className="py-2 px-3">Date & Time</th>
-                      <th className="py-2 px-3">Joiner Name</th>
-                      <th className="py-2 px-3">Zone</th>
-                      <th className="py-2 px-3">Payment Mode</th>
-                      <th className="py-2 px-3">UTR / Ref</th>
-                      <th className="py-2 px-3 text-right">Amount</th>
-                      <th className="py-2 px-3 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {paymentHistory.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50">
-                        <td className="py-2 px-3 text-slate-600">{item.date}</td>
-                        <td className="py-2 px-3 font-bold text-slate-800">{item.joinerName}</td>
-                        <td className="py-2 px-3 text-slate-600">{item.zone}</td>
-                        <td className="py-2 px-3 font-medium text-slate-700">{item.mode}</td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{item.utr}</td>
-                        <td className="py-2 px-3 text-right font-bold text-emerald-800">
-                          ₹{item.amount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {item.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: PAYOUT REQUESTS */}
-          {activeTab === 'Payout Requests' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">Joiner Payout Requests</h4>
-                  <p className="text-xs text-slate-500">Withdrawal requests requested directly by hotel joiners</p>
+                  <div className="pt-2.5 flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedJoinerId(j.id);
+                        setPayoutTargetJoiner(j);
+                        setIsPayoutModalOpen(true);
+                      }}
+                      className="flex-1 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg shadow-2xs cursor-pointer"
+                    >
+                      Payout
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedJoinerId(j.id);
+                        setIsHistoryModalOpen(true);
+                      }}
+                      className="py-1 px-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[11px] rounded-lg cursor-pointer"
+                    >
+                      Ledger
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
-                    <tr>
-                      <th className="py-2 px-3">Req ID</th>
-                      <th className="py-2 px-3">Joiner</th>
-                      <th className="py-2 px-3">Zone</th>
-                      <th className="py-2 px-3">Requested Date</th>
-                      <th className="py-2 px-3">Transfer Details</th>
-                      <th className="py-2 px-3 text-right">Amount</th>
-                      <th className="py-2 px-3 text-center">Status</th>
-                      <th className="py-2 px-3 text-center">Actions</th>
+        {/* TAB 3: PAYMENT HISTORY */}
+        {activeTab === 'Payment History' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-800">Disbursement & Payment History</h4>
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-1 bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Export All
+              </button>
+            </div>
+
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
+                  <tr>
+                    <th className="py-2.5 px-3">Date & Time</th>
+                    <th className="py-2.5 px-3">Joiner Name</th>
+                    <th className="py-2.5 px-3">Zone</th>
+                    <th className="py-2.5 px-3">Payment Mode</th>
+                    <th className="py-2.5 px-3">UTR / Ref</th>
+                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paymentHistory.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2 px-3 text-slate-600">{item.date}</td>
+                      <td className="py-2 px-3 font-bold text-slate-800">{item.joinerName}</td>
+                      <td className="py-2 px-3 text-slate-600">{item.zone}</td>
+                      <td className="py-2 px-3 font-medium text-slate-700">{item.mode}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{item.utr}</td>
+                      <td className="py-2 px-3 text-right font-bold text-emerald-800">
+                        ₹{item.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          {item.status}
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {payoutRequests.map((req) => (
-                      <tr key={req.id} className="hover:bg-slate-50">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-700">{req.id}</td>
-                        <td className="py-2 px-3 font-bold text-slate-800">{req.joinerName}</td>
-                        <td className="py-2 px-3 text-slate-600">{req.zone}</td>
-                        <td className="py-2 px-3 text-slate-500">{req.requestDate}</td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-600">
-                          {req.paymentMethod} • {req.upiOrAccount}
-                        </td>
-                        <td className="py-2 px-3 text-right font-extrabold text-slate-900">
-                          ₹{req.amount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            req.status === 'Approved'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : req.status === 'Pending'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}>
-                            {req.status}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {req.status === 'Pending' ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => handleApprovePayout(req)}
-                                className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded text-[10px]"
-                              >
-                                Approve & Pay
-                              </button>
-                              <button
-                                onClick={() => handleRejectPayout(req.id)}
-                                className="px-2 py-0.5 bg-slate-100 hover:bg-rose-50 text-rose-700 border border-slate-200 rounded text-[10px] font-bold"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 font-medium text-[11px]">Processed</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: PAYOUT REQUESTS */}
+        {activeTab === 'Payout Requests' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-sm text-slate-800">Joiner Payout Requests</h4>
+                <p className="text-xs text-slate-500">Withdrawal requests requested directly by hotel joiners</p>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Right Column: Selected Joiner Details & Recent Transactions (4 cols) */}
-        {/* Sticky so it does not scroll with main panel */}
-        <div className="lg:col-span-4 sticky top-4 self-start max-h-[calc(100vh-140px)] overflow-y-auto space-y-4">
-          {activeJoiner ? (
-            <>
-              {/* Joiner Details Card */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="font-bold text-sm text-slate-800">Joiner Details</h3>
-                  <button
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                  >
-                    Edit
-                  </button>
-                </div>
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
+                  <tr>
+                    <th className="py-2.5 px-3">Req ID</th>
+                    <th className="py-2.5 px-3">Joiner</th>
+                    <th className="py-2.5 px-3">Zone</th>
+                    <th className="py-2.5 px-3">Requested Date</th>
+                    <th className="py-2.5 px-3">Transfer Details</th>
+                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {payoutRequests.map((req) => (
+                    <tr key={req.id} className="hover:bg-slate-50">
+                      <td className="py-2 px-3 font-mono font-bold text-slate-700">{req.id}</td>
+                      <td className="py-2 px-3 font-bold text-slate-800">{req.joinerName}</td>
+                      <td className="py-2 px-3 text-slate-600">{req.zone}</td>
+                      <td className="py-2 px-3 text-slate-500">{req.requestDate}</td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-600">
+                        {req.paymentMethod} • {req.upiOrAccount}
+                      </td>
+                      <td className="py-2 px-3 text-right font-extrabold text-slate-900">
+                        ₹{req.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          req.status === 'Approved'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : req.status === 'Pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        {req.status === 'Pending' ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleApprovePayout(req)}
+                              className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded text-[10px] cursor-pointer"
+                            >
+                              Approve & Pay
+                            </button>
+                            <button
+                              onClick={() => handleRejectPayout(req.id)}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-rose-50 text-rose-700 border border-slate-200 rounded text-[10px] font-bold cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-medium text-[11px]">Processed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
-            {/* Profile banner */}
+      {/* Selected Joiner Commission Details Section (Full-width Below Table) */}
+      {activeJoiner && (
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div className="flex items-center gap-3">
               <img
                 src={activeJoiner.avatar}
                 alt={activeJoiner.name}
-                className="w-12 h-12 rounded-full object-cover border-2 border-emerald-600 shadow-2xs"
+                className="w-12 h-12 rounded-full object-cover border-2 border-emerald-600 shadow-xs shrink-0"
               />
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-base text-slate-800">{activeJoiner.name}</h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                    Active
+                  <h3 className="font-bold text-base text-slate-800">{activeJoiner.name}</h3>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                    activeJoiner.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {activeJoiner.status}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500">Hotel Joiner</p>
-                <p className="text-xs text-slate-600 font-medium flex items-center gap-1 mt-0.5">
-                  <Phone className="w-3 h-3 text-slate-400" /> {activeJoiner.mobile}
-                </p>
-                <p className="text-xs text-slate-600 font-medium flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-slate-400" /> {activeJoiner.zone} Zone
+                <p className="text-xs text-slate-500">
+                  Joiner • Mobile: <span className="font-semibold text-slate-700">{activeJoiner.mobile}</span> • Zone: <span className="font-semibold text-slate-700">{activeJoiner.zone}</span>
                 </p>
               </div>
             </div>
 
-            {/* 6 Stat Badges (3x2 Grid) */}
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              {/* Total Orders */}
-              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
-                <span className="text-[10px] text-slate-500 font-medium">Total Orders</span>
-                <p className="font-bold text-slate-900 text-sm mt-0.5">{activeJoiner.totalOrders}</p>
-                <span className="text-[10px] text-slate-400">Assigned 📦</span>
-              </div>
-
-              {/* Completed Orders */}
-              <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 flex flex-col justify-between">
-                <span className="text-[10px] text-emerald-800 font-medium">Completed</span>
-                <p className="font-bold text-emerald-950 text-sm mt-0.5">{activeJoiner.completedOrders ?? activeJoiner.deliveredOrders}</p>
-                <span className="text-[10px] text-emerald-600">Earned comm ✅</span>
-              </div>
-
-              {/* Pending Orders */}
-              <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 flex flex-col justify-between">
-                <span className="text-[10px] text-amber-800 font-medium">Pending Orders</span>
-                <p className="font-bold text-amber-950 text-sm mt-0.5">{activeJoiner.pendingOrders ?? Math.max(0, activeJoiner.totalOrders - (activeJoiner.completedOrders ?? activeJoiner.deliveredOrders))}</p>
-                <span className="text-[10px] text-amber-600">Awaiting ⏳</span>
-              </div>
-
-              {/* Total Commission */}
-              <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex flex-col justify-between">
-                <span className="text-[10px] text-blue-800 font-medium">Total Comm</span>
-                <p className="font-bold text-blue-950 text-sm mt-0.5">
-                  ₹{activeJoiner.commission.toLocaleString('en-IN')}
-                </p>
-                <span className="text-[10px] text-blue-600">Lifetime 💰</span>
-              </div>
-
-              {/* Paid Amount */}
-              <div className="bg-purple-50 p-2 rounded-lg border border-purple-100 flex flex-col justify-between">
-                <span className="text-[10px] text-purple-800 font-medium">Paid Amount</span>
-                <p className="font-bold text-purple-950 text-sm mt-0.5">
-                  ₹{activeJoiner.paidAmount.toLocaleString('en-IN')}
-                </p>
-                <span className="text-[10px] text-purple-600">Disbursed 💳</span>
-              </div>
-
-              {/* Pending Commission */}
-              <div className="bg-rose-50 p-2 rounded-lg border border-rose-100 flex flex-col justify-between">
-                <span className="text-[10px] text-rose-800 font-medium">Pending Comm</span>
-                <p className="font-bold text-rose-950 text-sm mt-0.5">
-                  ₹{activeJoiner.pendingAmount.toLocaleString('en-IN')}
-                </p>
-                <span className="text-[10px] text-rose-600">To pay ⚖️</span>
-              </div>
-            </div>
-
-            {/* View Full History Button */}
-            <button
-              onClick={() => setIsHistoryModalOpen(true)}
-              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <FileText className="w-4 h-4" /> View Full History
-            </button>
-          </div>
-
-          {/* Recent Commission Transactions */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-slate-800">Recent Commission Transactions</h3>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  setPayoutTargetJoiner(activeJoiner);
+                  setIsPayoutModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+              >
+                <Send className="w-3 h-3" /> Make Commission Payment
+              </button>
               <button
                 onClick={() => setIsHistoryModalOpen(true)}
-                className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
               >
-                View All
+                View Full History
+              </button>
+              <button
+                onClick={() => setIsEditModalOpen(true)}
+                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg cursor-pointer"
+                title="Edit Details"
+              >
+                <Edit className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
-                  <th className="py-1.5 px-2">Date</th>
-                  <th className="py-1.5 px-2">Order ID</th>
-                  <th className="py-1.5 px-2 text-right">Amount</th>
-                  <th className="py-1.5 px-2 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(activeJoiner.recentTransactions && activeJoiner.recentTransactions.length > 0
-                  ? activeJoiner.recentTransactions
-                  : [
-                      { date: '11 Sep 2026', orderId: 'FB1001', amount: 100, status: 'Paid' as const },
-                      { date: '10 Sep 2026', orderId: 'FB1006', amount: 100, status: 'Paid' as const },
-                      { date: '09 Sep 2026', orderId: 'FB1010', amount: 100, status: 'Paid' as const },
-                      { date: '08 Sep 2026', orderId: 'FB1015', amount: 100, status: 'Pending' as const },
-                      { date: '07 Sep 2026', orderId: 'FB1018', amount: 100, status: 'Paid' as const }
-                    ]
-                ).map((tx, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-1.5 px-2 text-slate-600">{tx.date}</td>
-                    <td className="py-1.5 px-2 font-bold text-slate-800">{tx.orderId}</td>
-                    <td className="py-1.5 px-2 text-right font-bold text-slate-900">₹{tx.amount}</td>
-                    <td className="py-1.5 px-2 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          tx.status === 'Paid'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {tx.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Make Commission Payment Button */}
-            <button
-              onClick={() => {
-                setPayoutTargetJoiner(activeJoiner);
-                setIsPayoutModalOpen(true);
-              }}
-              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <Send className="w-4 h-4" /> Make Commission Payment
-            </button>
           </div>
-        </>
-      ) : (
-        <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 text-xs">
-          No joiner selected.
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left: 6-Grid Stats and Settlement Info */}
+            <div className="lg:col-span-6 space-y-4">
+              <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-medium">Total Orders</span>
+                  <p className="font-bold text-slate-900 text-base mt-0.5">{activeJoiner.totalOrders}</p>
+                  <span className="text-[10px] text-slate-400">Assigned 📦</span>
+                </div>
+                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                  <span className="text-[10px] text-slate-400 font-medium">Completed</span>
+                  <p className="font-bold text-emerald-900 text-base mt-0.5">{activeJoiner.completedOrders ?? activeJoiner.deliveredOrders ?? 0}</p>
+                  <span className="text-[10px] text-emerald-700">Earned comm ✅</span>
+                </div>
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                  <span className="text-[10px] text-slate-400 font-medium">Pending Orders</span>
+                  <p className="font-bold text-amber-900 text-base mt-0.5">{activeJoiner.pendingOrders ?? 0}</p>
+                  <span className="text-[10px] text-amber-700">Awaiting ⏳</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                <div className="bg-sky-50 p-2.5 rounded-xl border border-sky-100">
+                  <span className="text-[10px] text-slate-400 font-medium">Total Comm</span>
+                  <p className="font-bold text-sky-900 text-base mt-0.5">₹{activeJoiner.commission.toLocaleString('en-IN')}</p>
+                  <span className="text-[10px] text-sky-700">Lifetime 💰</span>
+                </div>
+                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                  <span className="text-[10px] text-slate-400 font-medium">Paid Amount</span>
+                  <p className="font-bold text-emerald-900 text-base mt-0.5">₹{activeJoiner.paidAmount.toLocaleString('en-IN')}</p>
+                  <span className="text-[10px] text-emerald-700">Disbursed 💳</span>
+                </div>
+                <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-100">
+                  <span className="text-[10px] text-slate-400 font-medium">Pending Comm</span>
+                  <p className="font-bold text-rose-900 text-base mt-0.5">₹{activeJoiner.pendingAmount.toLocaleString('en-IN')}</p>
+                  <span className="text-[10px] text-rose-700">To pay ⚖️</span>
+                </div>
+              </div>
+
+              {/* Settlement Bank Info */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">UPI VPA:</span>
+                  <span className="font-mono font-bold text-slate-800">{activeJoiner.upiId || 'Not provided'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Bank Account:</span>
+                  <span className="font-medium text-slate-700">{activeJoiner.bankName} ({activeJoiner.accountNo})</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">IFSC Code:</span>
+                  <span className="font-mono text-slate-700">{activeJoiner.ifscCode}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Recent Commission Transactions */}
+            <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-xs text-slate-800">Recent Commission Transactions</h4>
+                <button
+                  onClick={() => setIsHistoryModalOpen(true)}
+                  className="text-[11px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                >
+                  View All
+                </button>
+              </div>
+
+              <div className="overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 font-semibold">
+                      <th className="py-2 px-2">Date</th>
+                      <th className="py-2 px-2">Order ID</th>
+                      <th className="py-2 px-2 text-right">Amount</th>
+                      <th className="py-2 px-2 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(activeJoiner.recentTransactions || []).slice(0, 5).map((tx, idx) => (
+                      <tr key={tx.id || idx} className="hover:bg-slate-100/60 transition-colors">
+                        <td className="py-2 px-2 text-slate-600">{tx.date}</td>
+                        <td className="py-2 px-2 font-bold text-slate-800">{tx.orderId}</td>
+                        <td className="py-2 px-2 text-right font-bold text-slate-900">₹{tx.amount.toLocaleString('en-IN')}</td>
+                        <td className="py-2 px-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                            tx.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {tx.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </div>
-  </div>
 
-  {/* Interactive Modals */}
-  {(payoutTargetJoiner || activeJoiner) && (
-    <>
+      {/* Bottom Promo Banner */}
+      <div className="bg-emerald-700 text-white p-4 rounded-2xl flex items-center justify-between shadow-md">
+        <div>
+          <h3 className="font-extrabold text-lg">Together We Grow</h3>
+          <p className="text-xs text-emerald-100 mt-0.5">
+            Connecting Hotels with Fresh Produce • More Orders • Stronger Partnerships • A Healthier Tomorrow
+          </p>
+        </div>
+        <span className="text-3xl">🧺🥬🥕</span>
+      </div>
+
+      {/* Modals */}
       <MakePayoutModal
         isOpen={isPayoutModalOpen}
-        onClose={() => {
-          setIsPayoutModalOpen(false);
-          setPayoutTargetJoiner(null);
-        }}
+        onClose={() => setIsPayoutModalOpen(false)}
         joiner={payoutTargetJoiner || activeJoiner}
         onPaymentSuccess={handlePaymentSuccess}
       />
@@ -1247,8 +1161,6 @@ export const CommissionPage: React.FC = () => {
         joiner={activeJoiner}
         onSave={handleEditSave}
       />
-    </>
-  )}
-</div>
-);
+    </div>
+  );
 };
