@@ -19,9 +19,7 @@ import {
   Layers,
   Sparkles,
   Compass,
-  Maximize2,
-  UserCheck,
-  Key
+  UserCheck
 } from 'lucide-react';
 import type { Zone } from '../types';
 import { authService } from '../firebase/authService';
@@ -244,7 +242,6 @@ export const ZonesPage: React.FC = () => {
     if (found) {
       setSelectedZone(found);
     } else {
-      // Create or select virtual zone representation
       const fallbackZone: Zone = {
         id: Date.now(),
         name: geoZone.name,
@@ -268,20 +265,6 @@ export const ZonesPage: React.FC = () => {
       activeName.includes(geoZone.name.toLowerCase()) ||
       geoZone.name.toLowerCase().includes(activeName)
     );
-  };
-
-  const getGeoZoneHotelsCount = (geoZone: PuneZoneGeo) => {
-    const matched = hotels.filter(h => {
-      const hZone = (h.zone || '').toLowerCase();
-      return geoZone.aliases.some(alias => hZone.includes(alias));
-    });
-    if (matched.length > 0) return matched.length;
-
-    const matchedZone = zones.find(z => {
-      const zName = (z.name || '').toLowerCase();
-      return geoZone.aliases.some(alias => zName.includes(alias));
-    });
-    return matchedZone ? (matchedZone.hotelsCount || 28) : 32;
   };
 
   const handleDelete = (e: React.MouseEvent, zoneId: number | string, zoneName: string) => {
@@ -331,7 +314,7 @@ export const ZonesPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-5">
-      {/* Top Header Metrics (5 Cards + Action Button) */}
+      {/* Top 6 KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-center">
         <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
@@ -339,7 +322,7 @@ export const ZonesPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-slate-500">Total Zones</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{zones.length || 7}</h3>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{zones.length}</h3>
           </div>
         </div>
 
@@ -349,7 +332,7 @@ export const ZonesPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-slate-500">Total Hotels</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{hotels.length || 240}</h3>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{hotels.length}</h3>
           </div>
         </div>
 
@@ -359,7 +342,7 @@ export const ZonesPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-slate-500">Total Joiners</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{joiners.length || 26}</h3>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{joiners.length}</h3>
           </div>
         </div>
 
@@ -368,7 +351,7 @@ export const ZonesPage: React.FC = () => {
             <ShoppingBag className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-slate-500">Total Orders (This Month)</p>
+            <p className="text-[11px] font-semibold text-slate-500">Total Orders</p>
             <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{orders.length}</h3>
           </div>
         </div>
@@ -378,7 +361,7 @@ export const ZonesPage: React.FC = () => {
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-slate-500">Total Sales (This Month)</p>
+            <p className="text-[11px] font-semibold text-slate-500">Total Sales</p>
             <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹{totalSalesAmount.toLocaleString('en-IN')}</h3>
           </div>
         </div>
@@ -393,55 +376,81 @@ export const ZonesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid: Left (Zones List) + Right (Zone Map & Zone Details) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Zones List Table (7 cols) */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base text-slate-800">Zones List</h3>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200">
-                {filteredZones.length} Zones
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="relative w-48">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search zone name or area..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
-                />
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-700 cursor-pointer"
-              >
-                <option value="All">Status: All</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
+      {/* Full-width Zones List Table Section (No Slider) */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Zones List</h3>
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
+              {filteredZones.length} {filteredZones.length === 1 ? 'Zone' : 'Zones'}
+            </span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative w-full sm:w-48 shrink-0">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search zone name or area..."
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={e => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+            >
+              <option value="All">Status: All</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+
+            <button
+              onClick={() => setIsAddZoneOpen(true)}
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" /> New Zone
+            </button>
+          </div>
+        </div>
+
+        {/* Table View */}
+        {filteredZones.length === 0 ? (
+          <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+            <p className="text-xs font-semibold text-slate-700">No zones match your filter criteria.</p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('All');
+              }}
+              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          <div className="w-full">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                  <th className="py-2.5 px-2">#</th>
-                  <th className="py-2.5 px-2">Zone Name</th>
-                  <th className="py-2.5 px-2">Coverage / Areas</th>
-                  <th className="py-2.5 px-2 text-center">Hotels</th>
-                  <th className="py-2.5 px-2 text-center">Joiners</th>
-                  <th className="py-2.5 px-2 text-center">Orders</th>
-                  <th className="py-2.5 px-2 text-right">Sales</th>
-                  <th className="py-2.5 px-2 text-center">Status</th>
-                  <th className="py-2.5 px-2 text-center">Actions</th>
+                  <th className="py-2.5 px-3 w-12 whitespace-nowrap">#</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Zone Name</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Coverage / Areas</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Hotels</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Joiners</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Orders</th>
+                  <th className="py-2.5 px-3 text-right whitespace-nowrap">Sales</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -456,31 +465,33 @@ export const ZonesPage: React.FC = () => {
                         isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
                       }`}
                     >
-                      <td className="py-2.5 px-2 font-medium text-slate-500">{idx + 1}</td>
-                      <td className="py-2.5 px-2 font-bold text-slate-800 flex items-center gap-2">
-                        <MapPin className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-700' : 'text-slate-400'}`} />
-                        <span>{z.name}</span>
-                        {z.addedBy === 'Admin' && (
-                          <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold">
-                            <Shield className="w-2 h-2 text-amber-600" /> Admin
-                          </span>
-                        )}
+                      <td className="py-2.5 px-3 font-medium text-slate-500 whitespace-nowrap">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <MapPin className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-700' : 'text-slate-400'}`} />
+                          <span>{z.name}</span>
+                          {z.addedBy === 'Admin' && (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold">
+                              <Shield className="w-2 h-2 text-amber-600" /> Admin
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="py-2.5 px-2 text-slate-600 truncate max-w-[140px]" title={z.areaLocations}>
-                        {z.areaLocations}
+                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap" title={z.areaLocations}>
+                        {z.areaLocations || '—'}
                       </td>
-                      <td className="py-2.5 px-2 text-center font-bold text-slate-800">{stats.hotelsCount}</td>
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700">{stats.joinersCount}</td>
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700">{stats.ordersCount}</td>
-                      <td className="py-2.5 px-2 text-right font-bold text-slate-900">₹{stats.salesCount.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 px-2 text-center">
+                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">{stats.joinersCount}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">{stats.ordersCount}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.salesCount.toLocaleString('en-IN')}</td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                           (z.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                         }`}>
                           {z.status || 'Active'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2 text-center">
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={e => handleEditClick(e, z)}
@@ -504,364 +515,70 @@ export const ZonesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Right Column: Zone Map Pune & Selected Zone Details Panel (5 cols) */}
-        <div className="lg:col-span-5 space-y-5">
-          {/* Zone Map - Pune Canvas SVG with Accurate Shapes */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <Compass className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900">Zone Map - Pune</h3>
-                  <p className="text-[11px] text-slate-500">7 Operational Supply Zones • Interactive Geo Map</p>
-                </div>
+      {/* Selected Zone Details & Interactive Pune Map Section (Below Table) */}
+      {activeZone && (
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold border-2 border-emerald-600 shadow-xs shrink-0">
+                <MapPin className="w-6 h-6" />
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setShowRiverLayer(!showRiverLayer)}
-                  className={`px-2 py-1 text-[10px] font-bold rounded-md border cursor-pointer transition-colors ${
-                    showRiverLayer
-                      ? 'bg-sky-50 text-sky-700 border-sky-200'
-                      : 'bg-slate-50 text-slate-500 border-slate-200'
-                  }`}
-                  title="Toggle Mula-Mutha River"
-                >
-                  🌊 River
-                </button>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                  Pune Metro
-                </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-slate-800">{activeZone.name}</h3>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    (activeZone.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {activeZone.status || 'Active'}
+                  </span>
+                  {activeZone.addedBy === 'Admin' && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                      <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">{activeZone.areaLocations || 'Pune Supply Zone'}</p>
               </div>
             </div>
 
-            {/* Quick Zone Chips Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
-              {PUNE_ZONES_DATA.map(gz => {
-                const isSelected = isGeoZoneActive(gz);
-                return (
-                  <button
-                    key={gz.id}
-                    onClick={() => handleMapZoneClick(gz)}
-                    className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap cursor-pointer transition-all ${
-                      isSelected
-                        ? 'bg-slate-900 text-white shadow-xs scale-102'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                    }`}
-                  >
-                    {gz.name}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Interactive Vector Map SVG */}
-            <div className="h-68 bg-slate-50 rounded-xl overflow-hidden relative border border-slate-200/90 shadow-inner flex items-center justify-center select-none">
-              <svg
-                className="w-full h-full cursor-pointer"
-                viewBox="0 0 720 460"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={e => handleEditClick(e, activeZone)}
+                className="px-3.5 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
               >
-                <defs>
-                  {/* Subtle Grid Background Pattern */}
-                  <pattern id="pune-grid" width="30" height="30" patternUnits="userSpaceOnUse">
-                    <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e2e8f0" strokeWidth="0.75" strokeDasharray="2 2" />
-                  </pattern>
-
-                  {/* Active Zone Glow Filter */}
-                  <filter id="zone-glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#047857" floodOpacity="0.28" />
-                  </filter>
-
-                  {/* Soft Zone Shadow */}
-                  <filter id="zone-soft-shadow" x="-10%" y="-10%" width="120%" height="120%">
-                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.08" />
-                  </filter>
-                </defs>
-
-                {/* Base Map Background */}
-                <rect width="720" height="460" fill="#f8fafc" />
-                <rect width="720" height="460" fill="url(#pune-grid)" />
-
-                {/* City Boundary Contour Outline */}
-                <path
-                  d="M 30 30 C 120 10, 240 15, 340 30 C 470 50, 600 80, 690 140 C 715 220, 700 320, 670 380 C 620 440, 520 455, 420 450 C 330 440, 200 420, 130 360 C 60 300, 30 200, 30 110 Z"
-                  fill="none"
-                  stroke="#cbd5e1"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 4"
-                />
-
-                {/* Major Highways & Arterials */}
-                {/* NH-48 / Western Bypass */}
-                <path
-                  d="M 50 20 L 70 140 L 90 260 L 140 440"
-                  fill="none"
-                  stroke="#cbd5e1"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 50 20 L 70 140 L 90 260 L 140 440"
-                  fill="none"
-                  stroke="#f1f5f9"
-                  strokeWidth="1.5"
-                  strokeDasharray="5 5"
-                />
-
-                {/* Pune-Ahmednagar Highway */}
-                <path
-                  d="M 320 180 L 460 160 L 680 180"
-                  fill="none"
-                  stroke="#cbd5e1"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-
-                {/* Pune-Solapur Highway */}
-                <path
-                  d="M 340 320 L 480 340 L 670 410"
-                  fill="none"
-                  stroke="#cbd5e1"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-
-                {/* Mula-Mutha River Flow */}
-                {showRiverLayer && (
-                  <g opacity="0.85">
-                    {/* Outer River Glow */}
-                    <path
-                      d="M 50 180 C 130 170, 200 190, 260 210 C 320 230, 380 220, 450 235 C 520 250, 580 270, 690 280"
-                      fill="none"
-                      stroke="#bae6fd"
-                      strokeWidth="7"
-                      strokeLinecap="round"
-                    />
-                    {/* River Centerline */}
-                    <path
-                      d="M 50 180 C 130 170, 200 190, 260 210 C 320 230, 380 220, 450 235 C 520 250, 580 270, 690 280"
-                      fill="none"
-                      stroke="#0284c7"
-                      strokeWidth="2.5"
-                      strokeDasharray="8 6"
-                      strokeLinecap="round"
-                    />
-                    <text x="310" y="245" fill="#0369a1" fontSize="9" fontWeight="bold" fontStyle="italic" opacity="0.75">
-                      Mula-Mutha River
-                    </text>
-                  </g>
-                )}
-
-                {/* Render All 7 Zones in Proper Shapes */}
-                {PUNE_ZONES_DATA.map(gz => {
-                  const isSelected = isGeoZoneActive(gz);
-                  const isHovered = hoveredMapZone === gz.id;
-                  const hotelsCount = getGeoZoneHotelsCount(gz);
-
-                  return (
-                    <g
-                      key={gz.id}
-                      onClick={() => handleMapZoneClick(gz)}
-                      onMouseEnter={() => setHoveredMapZone(gz.id)}
-                      onMouseLeave={() => setHoveredMapZone(null)}
-                      className="cursor-pointer transition-all duration-200"
-                    >
-                      {/* Polygon Body */}
-                      <path
-                        d={gz.path}
-                        fill={isSelected ? gz.activeFill : isHovered ? gz.activeFill : gz.fill}
-                        stroke={isSelected ? gz.activeStroke : isHovered ? gz.activeStroke : gz.stroke}
-                        strokeWidth={isSelected ? '3.5' : isHovered ? '2.5' : '2'}
-                        filter={isSelected ? 'url(#zone-glow)' : 'url(#zone-soft-shadow)'}
-                        opacity={isSelected ? 1 : isHovered ? 0.95 : 0.88}
-                        className="transition-all duration-200"
-                      />
-
-                      {/* Pulsing Radar Ring on Selected Zone */}
-                      {isSelected && (
-                        <g>
-                          <circle
-                            cx={gz.center.x}
-                            cy={gz.center.y - 12}
-                            r="16"
-                            fill="none"
-                            stroke={gz.activeStroke}
-                            strokeWidth="1.5"
-                            opacity="0.4"
-                            className="animate-ping"
-                          />
-                          <circle
-                            cx={gz.center.x}
-                            cy={gz.center.y - 12}
-                            r="6"
-                            fill={gz.activeStroke}
-                            className="shadow-md"
-                          />
-                        </g>
-                      )}
-
-                      {/* Zone Center Marker Pin (when not selected) */}
-                      {!isSelected && (
-                        <circle
-                          cx={gz.center.x}
-                          cy={gz.center.y - 12}
-                          r="4"
-                          fill={gz.stroke}
-                          opacity="0.8"
-                        />
-                      )}
-
-                      {/* Zone Name Label */}
-                      <text
-                        x={gz.center.x}
-                        y={gz.center.y + 4}
-                        textAnchor="middle"
-                        fill={isSelected ? '#0f172a' : gz.textColor}
-                        fontSize={isSelected ? '13' : '11.5'}
-                        fontWeight="800"
-                        letterSpacing="-0.2px"
-                        style={{ pointerEvents: 'none' }}
-                      >
-                        {gz.name}
-                      </text>
-
-                      {/* Hotel Count Pill Badge */}
-                      <g transform={`translate(${gz.center.x - 30}, ${gz.center.y + 11})`}>
-                        <rect
-                          width="60"
-                          height="16"
-                          rx="8"
-                          fill={isSelected ? '#0f172a' : '#ffffff'}
-                          stroke={isSelected ? '#0f172a' : gz.stroke}
-                          strokeWidth="1"
-                          opacity={isSelected ? '0.9' : '0.85'}
-                        />
-                        <text
-                          x="30"
-                          y="11.5"
-                          textAnchor="middle"
-                          fill={isSelected ? '#ffffff' : gz.textColor}
-                          fontSize="9"
-                          fontWeight="700"
-                          style={{ pointerEvents: 'none' }}
-                        >
-                          {hotelsCount} Hotels
-                        </text>
-                      </g>
-                    </g>
-                  );
-                })}
-
-                {/* Compass Rose in Corner */}
-                <g transform="translate(670, 45)" opacity="0.65">
-                  <circle cx="0" cy="0" r="14" fill="#ffffff" stroke="#94a3b8" strokeWidth="1" />
-                  <polygon points="0,-12 3,-2 0,0 -3,-2" fill="#ef4444" />
-                  <polygon points="0,12 3,2 0,0 -3,2" fill="#64748b" />
-                  <text x="0" y="-14" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#0f172a">N</text>
-                </g>
-              </svg>
-            </div>
-
-            {/* Map Legend Footer */}
-            <div className="grid grid-cols-4 gap-1.5 pt-1 text-[10px] text-slate-600 font-medium">
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0" />
-                <span className="truncate">PCMC</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="truncate">Aundh</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                <span className="truncate">Pune Core</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
-                <span className="truncate">Viman Nagar</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" />
-                <span className="truncate">Kharadi</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 shrink-0" />
-                <span className="truncate">Magarpatta</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-slate-50 border border-slate-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                <span className="truncate">Hadapsar</span>
-              </div>
-              <div className="flex items-center gap-1.5 p-1 rounded bg-sky-50 border border-sky-100 text-sky-800 font-bold">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-600 shrink-0" />
-                <span className="truncate">Active Zone</span>
-              </div>
+                <Edit className="w-3 h-3" /> Edit Zone
+              </button>
+              <button
+                onClick={e => handleDelete(e, activeZone.id, activeZone.name)}
+                className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+                title="Delete Zone"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
-          {/* Selected Zone Details Card */}
-          {activeZone && (
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-base text-slate-800">{activeZone.name}</h3>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        (activeZone.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {activeZone.status || 'Active'}
-                      </span>
-                      {activeZone.addedBy === 'Admin' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                          <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500">{activeZone.areaLocations}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={e => handleEditClick(e, activeZone)}
-                    className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors"
-                  >
-                    Edit Zone
-                  </button>
-                  <button
-                    onClick={e => handleDelete(e, activeZone.id, activeZone.name)}
-                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer transition-colors"
-                    title="Delete Zone"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left: Zone Stats, Zone Admin, and Assigned Joiners */}
+            <div className="lg:col-span-6 space-y-4">
               {/* Zone Stats Grid */}
               {(() => {
                 const activeStats = getZoneStats(activeZone);
                 return (
                   <div className="grid grid-cols-4 gap-2 text-center text-xs">
                     <div className="bg-sky-50 p-2.5 rounded-lg border border-sky-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Total Hotels</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Hotels</p>
                       <p className="font-bold text-sky-900 text-base">{activeStats.hotelsCount}</p>
                     </div>
                     <div className="bg-orange-50 p-2.5 rounded-lg border border-orange-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Total Joiners</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Joiners</p>
                       <p className="font-bold text-orange-900 text-base">{activeStats.joinersCount}</p>
                     </div>
                     <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Total Orders</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Orders</p>
                       <p className="font-bold text-purple-900 text-base">{activeStats.ordersCount}</p>
                     </div>
                     <div className="bg-rose-50 p-2.5 rounded-lg border border-rose-100">
@@ -875,7 +592,10 @@ export const ZonesPage: React.FC = () => {
               {/* Assigned Zone Admin Card */}
               {(() => {
                 const subAdmins = authService.getSubAdminAccounts();
-                const zoneAdmin = subAdmins.find(s => s.assignedZone.toLowerCase().includes(activeZone.name.toLowerCase()) || activeZone.name.toLowerCase().includes(s.assignedZone.toLowerCase()));
+                const zoneAdmin = subAdmins.find(s =>
+                  s.assignedZone.toLowerCase().includes(activeZone.name.toLowerCase()) ||
+                  activeZone.name.toLowerCase().includes(s.assignedZone.toLowerCase())
+                );
                 return (
                   <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -919,9 +639,9 @@ export const ZonesPage: React.FC = () => {
               })()}
 
               {/* Assigned Joiners List */}
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-xs text-slate-800">Assigned Joiners ({displayJoiners.length})</h4>
+                  <h4 className="font-bold text-xs text-slate-800">Assigned Field Joiners ({displayJoiners.length})</h4>
                   <button
                     onClick={() => setActiveTab('Hotel Joiners')}
                     className="text-[11px] text-blue-600 font-semibold hover:underline cursor-pointer"
@@ -932,7 +652,7 @@ export const ZonesPage: React.FC = () => {
 
                 <div className="space-y-1.5 text-xs">
                   {displayJoiners.length === 0 ? (
-                    <div className="text-center py-6 bg-slate-50 rounded-lg border border-slate-100 text-slate-400 text-xs">
+                    <div className="text-center py-5 bg-slate-50 rounded-lg border border-slate-100 text-slate-400 text-xs">
                       No joiners assigned to this zone yet.
                     </div>
                   ) : (
@@ -944,7 +664,7 @@ export const ZonesPage: React.FC = () => {
                         title={`Click to view ${j.name}'s profile`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-500">{idx + 1}</span>
+                          <span className="font-bold text-slate-400">{idx + 1}</span>
                           <span className="font-bold text-slate-800">{j.name}</span>
                           <span className="text-slate-400 text-[11px]">({j.hotelsCount} Hotels)</span>
                         </div>
@@ -962,8 +682,142 @@ export const ZonesPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
+
+            {/* Right: Zone Map - Pune Interactive Geo Canvas */}
+            <div className="lg:col-span-6 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-900">Pune Supply Corridors</h3>
+                    <p className="text-[10px] text-slate-500">Interactive Geo Map • Click any area</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setShowRiverLayer(!showRiverLayer)}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md border cursor-pointer transition-colors ${
+                      showRiverLayer
+                        ? 'bg-sky-50 text-sky-700 border-sky-200'
+                        : 'bg-slate-50 text-slate-500 border-slate-200'
+                    }`}
+                    title="Toggle Mula-Mutha River"
+                  >
+                    🌊 River
+                  </button>
+                </div>
+              </div>
+
+              {/* Zone Chips Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                {PUNE_ZONES_DATA.map(gz => {
+                  const isSelected = isGeoZoneActive(gz);
+                  return (
+                    <button
+                      key={gz.id}
+                      onClick={() => handleMapZoneClick(gz)}
+                      className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
+                      }`}
+                    >
+                      {gz.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Vector SVG Map */}
+              <div className="h-64 bg-white rounded-xl overflow-hidden relative border border-slate-200 shadow-inner flex items-center justify-center select-none">
+                <svg
+                  className="w-full h-full cursor-pointer"
+                  viewBox="0 0 720 460"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <defs>
+                    <pattern id="pune-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e2e8f0" strokeWidth="0.75" strokeDasharray="2 2" />
+                    </pattern>
+                  </defs>
+
+                  <rect width="720" height="460" fill="#f8fafc" />
+                  <rect width="720" height="460" fill="url(#pune-grid)" />
+
+                  {/* City Boundary */}
+                  <path
+                    d="M 30 30 C 120 10, 240 15, 340 30 C 470 50, 600 80, 690 140 C 715 220, 700 320, 670 380 C 620 440, 520 455, 420 450 C 330 440, 200 420, 130 360 C 60 300, 30 200, 30 110 Z"
+                    fill="none"
+                    stroke="#cbd5e1"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                  />
+
+                  {/* River Layer */}
+                  {showRiverLayer && (
+                    <path
+                      d="M 60 170 C 120 190, 180 220, 240 225 C 300 230, 360 215, 430 220 C 500 225, 580 250, 680 270"
+                      stroke="#38bdf8"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      fill="none"
+                      opacity="0.7"
+                    />
+                  )}
+
+                  {/* Zone Polygon Paths */}
+                  {PUNE_ZONES_DATA.map(gz => {
+                    const isSelected = isGeoZoneActive(gz);
+                    const isHovered = hoveredMapZone === gz.id;
+                    return (
+                      <g
+                        key={gz.id}
+                        onClick={() => handleMapZoneClick(gz)}
+                        onMouseEnter={() => setHoveredMapZone(gz.id)}
+                        onMouseLeave={() => setHoveredMapZone(null)}
+                        className="transition-all duration-200"
+                      >
+                        <path
+                          d={gz.path}
+                          fill={isSelected ? gz.activeFill : gz.fill}
+                          stroke={isSelected ? gz.activeStroke : gz.stroke}
+                          strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 1.5}
+                          className="transition-all"
+                        />
+                        <text
+                          x={gz.center.x}
+                          y={gz.center.y}
+                          textAnchor="middle"
+                          fill={gz.textColor}
+                          fontSize="13"
+                          fontWeight={isSelected ? 'bold' : '600'}
+                          className="pointer-events-none select-none"
+                        >
+                          {gz.shortLabel}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Bottom Promo Banner */}
+      <div className="bg-emerald-700 text-white p-4 rounded-2xl flex items-center justify-between shadow-md">
+        <div>
+          <h3 className="font-extrabold text-lg">Together We Grow</h3>
+          <p className="text-xs text-emerald-100 mt-0.5">
+            Connecting Hotels with Fresh Produce • More Orders • Stronger Partnerships • A Healthier Tomorrow
+          </p>
+        </div>
+        <span className="text-3xl">🧺🥬🥕</span>
       </div>
 
       {/* Edit Zone Modal */}
