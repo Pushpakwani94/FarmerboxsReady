@@ -312,292 +312,292 @@ export const JoinersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid: Left Table + Right Joiner Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Hotel Joiners List (7 cols) */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1">
-            <div className="flex items-center gap-2 shrink-0">
-              <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Hotel Joiners List</h3>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
-                {filteredJoiners.length} {filteredJoiners.length === 1 ? 'Joiner' : 'Joiners'}
-              </span>
+      {/* Full-width Hotel Joiners List Table Section */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Hotel Joiners List</h3>
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
+              {filteredJoiners.length} {filteredJoiners.length === 1 ? 'Joiner' : 'Joiners'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative w-full sm:w-48 shrink-0">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name, code..."
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
+              />
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative w-36 sm:w-44 shrink-0">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search by name, code..."
-                  value={searchTerm}
-                  onChange={e => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
-                />
-              </div>
+            <select
+              value={selectedZoneFilter}
+              onChange={e => {
+                setSelectedZoneFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+            >
+              <option value="All Zones">All Zones</option>
+              {zones.map(z => <option key={z.id} value={z.name}>{z.name}</option>)}
+            </select>
 
-              <select
-                value={selectedZoneFilter}
-                onChange={e => {
-                  setSelectedZoneFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
-              >
-                <option value="All Zones">All Zones</option>
-                {zones.map(z => <option key={z.id} value={z.name}>{z.name}</option>)}
-              </select>
+            <select
+              value={selectedStatusFilter}
+              onChange={e => {
+                setSelectedStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+            >
+              <option value="All Status">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
 
-              <select
-                value={selectedStatusFilter}
-                onChange={e => {
-                  setSelectedStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
-              >
-                <option value="All Status">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+            <button
+              onClick={() => setIsAddJoinerOpen(true)}
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" /> New Joiner
+            </button>
+          </div>
+        </div>
 
+        {/* Table or Empty State */}
+        {joiners.length === 0 ? (
+          <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 text-sm">No Hotel Joiners Found</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                Start by onboarding your field joiners to track partner hotels, commission earnings, and app orders.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => setIsAddJoinerOpen(true)}
-                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" /> New Joiner
+                <Plus className="w-3.5 h-3.5" /> Add First Joiner
+              </button>
+              <button
+                onClick={handleLoadDemoJoiners}
+                disabled={isSeeding}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                {isSeeding ? 'Loading...' : 'Load Demo Joiners'}
+              </button>
+            </div>
+          </div>
+        ) : filteredJoiners.length === 0 ? (
+          <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+            <p className="text-xs font-semibold text-slate-700">No joiners match your filter criteria.</p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedZoneFilter('All Zones');
+                setSelectedStatusFilter('All Status');
+              }}
+              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          <div className="w-full">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+                  <th className="py-2.5 px-3 w-12 whitespace-nowrap">#</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Joiner Name</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Mobile Number</th>
+                  <th className="py-2.5 px-3 whitespace-nowrap">Zone</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Hotels</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Orders</th>
+                  <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Earnings</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginatedJoiners.map((j, idx) => {
+                  const stats = getCalculatedJoinerStats(j);
+                  const isSelected = activeJoiner && String(activeJoiner.id) === String(j.id);
+                  return (
+                    <tr
+                      key={j.id}
+                      onClick={() => setSelectedJoiner(j)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 font-medium text-slate-500 whitespace-nowrap">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={j.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                            alt={j.name || 'Joiner'}
+                            className="w-6 h-6 rounded-full object-cover border border-emerald-600/30 shrink-0"
+                          />
+                          <span>{j.name || 'Unnamed Joiner'}</span>
+                          {j.addedBy === 'Admin' && (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold shrink-0">
+                              <Shield className="w-2 h-2 text-amber-600" /> Admin
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{j.mobile || '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">{j.zone || 'General'}</td>
+                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
+                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.ordersCount}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.totalEarnings.toLocaleString('en-IN')}</td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          (j.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {j.status || 'Active'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedJoiner(j);
+                            }}
+                            className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
+                            title="View Profile"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleOpenEdit(j);
+                            }}
+                            className="p-1 text-slate-500 hover:text-emerald-700 rounded hover:bg-slate-100 cursor-pointer"
+                            title="Edit Joiner"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={e => handleDelete(e, j.id, j.name)}
+                            className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
+                            title="Delete Joiner"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {filteredJoiners.length > 0 && (
+          <div className="flex items-center justify-between pt-2 text-xs text-slate-500">
+            <span>
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredJoiners.length)} of {filteredJoiners.length} joiners
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer ${
+                    currentPage === page ? 'bg-emerald-700 text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Selected Joiner Details & Performance Section */}
+      {activeJoiner && (
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <img
+                src={activeJoiner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                alt={activeJoiner.name}
+                className="w-12 h-12 rounded-full object-cover border-2 border-emerald-600 shadow-xs"
+              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-slate-800">{activeJoiner.name}</h3>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    (activeJoiner.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {activeJoiner.status || 'Active'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Joiner ID: <span className="font-semibold text-slate-700">{activeJoiner.joinerCode || `JN0${activeJoiner.id}`}</span> • Joined {activeJoiner.joinedDate || 'Recently'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  handleOpenEdit(activeJoiner);
+                }}
+                className="px-3.5 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+              >
+                <Edit className="w-3 h-3" /> Edit Profile
+              </button>
+              <button
+                onClick={e => handleDelete(e, activeJoiner.id, activeJoiner.name)}
+                className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+                title="Delete Joiner"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Table or Empty State */}
-          {joiners.length === 0 ? (
-            <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-800 text-sm">No Hotel Joiners Found</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                  Start by onboarding your field joiners to track partner hotels, commission earnings, and app orders.
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={() => setIsAddJoinerOpen(true)}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add First Joiner
-                </button>
-                <button
-                  onClick={handleLoadDemoJoiners}
-                  disabled={isSeeding}
-                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  {isSeeding ? 'Loading...' : 'Load Demo Joiners'}
-                </button>
-              </div>
-            </div>
-          ) : filteredJoiners.length === 0 ? (
-            <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-              <p className="text-xs font-semibold text-slate-700">No joiners match your filter criteria.</p>
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedZoneFilter('All Zones');
-                  setSelectedStatusFilter('All Status');
-                }}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
-              >
-                Reset Filters
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                    <th className="py-2.5 px-3 whitespace-nowrap">#</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Joiner Name</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Mobile Number</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Zone</th>
-                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Hotels</th>
-                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Orders</th>
-                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Earnings</th>
-                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
-                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedJoiners.map((j, idx) => {
-                    const stats = getCalculatedJoinerStats(j);
-                    const isSelected = activeJoiner && String(activeJoiner.id) === String(j.id);
-                    return (
-                      <tr
-                        key={j.id}
-                        onClick={() => setSelectedJoiner(j)}
-                        className={`cursor-pointer transition-colors ${
-                          isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
-                        }`}
-                      >
-                        <td className="py-2.5 px-3 font-medium text-slate-500 whitespace-nowrap">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                        <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={j.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                              alt={j.name || 'Joiner'}
-                              className="w-6 h-6 rounded-full object-cover border border-emerald-600/30 shrink-0"
-                            />
-                            <span>{j.name || 'Unnamed Joiner'}</span>
-                            {j.addedBy === 'Admin' && (
-                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold shrink-0">
-                                <Shield className="w-2 h-2 text-amber-600" /> Admin
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{j.mobile || '—'}</td>
-                        <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">{j.zone || 'General'}</td>
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
-                        <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.ordersCount}</td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.totalEarnings.toLocaleString('en-IN')}</td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            (j.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                          }`}>
-                            {j.status || 'Active'}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                setSelectedJoiner(j);
-                              }}
-                              className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
-                              title="View Profile"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                handleOpenEdit(j);
-                              }}
-                              className="p-1 text-slate-500 hover:text-emerald-700 rounded hover:bg-slate-100 cursor-pointer"
-                              title="Edit Joiner"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={e => handleDelete(e, j.id, j.name)}
-                              className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
-                              title="Delete Joiner"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination Controls */}
-          {filteredJoiners.length > 0 && (
-            <div className="flex items-center justify-between pt-2 text-xs text-slate-500">
-              <span>
-                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredJoiners.length)} of {filteredJoiners.length} joiners
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer ${
-                      currentPage === page ? 'bg-emerald-700 text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Selected Joiner Details & Performance Chart (5 cols) */}
-        <div className="lg:col-span-5 space-y-5">
-          {activeJoiner ? (
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={activeJoiner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                    alt={activeJoiner.name}
-                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-600 shadow-xs"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-base text-slate-800">{activeJoiner.name}</h3>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        (activeJoiner.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {activeJoiner.status || 'Active'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      Joiner ID: <span className="font-semibold text-slate-700">{activeJoiner.joinerCode || `JN0${activeJoiner.id}`}</span> • Joined {activeJoiner.joinedDate || 'Recently'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleOpenEdit(activeJoiner);
-                    }}
-                    className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
-                  >
-                    <Edit className="w-3 h-3" /> Edit
-                  </button>
-                  <button
-                    onClick={e => handleDelete(e, activeJoiner.id, activeJoiner.name)}
-                    className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
-                    title="Delete Joiner"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-xs text-slate-600">
-                <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.mobile || 'Not provided'}</p>
-                <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.email || 'Not provided'}</p>
-                <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.zone || 'Pune'} Zone</p>
-                <p className="flex items-center gap-2 pt-0.5">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left: Contact Details & Assigned Hotels */}
+            <div className="lg:col-span-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                <p className="flex items-center gap-2 text-slate-700"><Phone className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.mobile || 'Not provided'}</p>
+                <p className="flex items-center gap-2 text-slate-700"><Mail className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.email || 'Not provided'}</p>
+                <p className="flex items-center gap-2 text-slate-700"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {activeJoiner.zone || 'Pune'} Zone</p>
+                <p className="flex items-center gap-2 text-slate-700">
                   <span className="text-slate-400">Added By:</span>
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
                     <Shield className="w-2.5 h-2.5 text-amber-600" /> {activeJoiner.addedBy || activeJoiner.createdBy || 'Admin'}
@@ -605,7 +605,7 @@ export const JoinersPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Stats Grid */}
+              {/* Stats & Payout Breakdown */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div
                   onClick={() => setIsHotelsListModalOpen(true)}
@@ -630,7 +630,6 @@ export const JoinersPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Paid / Pending Breakdown */}
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center justify-between">
                   <div>
@@ -688,33 +687,33 @@ export const JoinersPage: React.FC = () => {
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Joiner Performance Bar Chart */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <h4 className="font-bold text-xs text-slate-800">Joiner Performance (Last 6 Months)</h4>
-                <div className="h-32 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={activeJoiner.performanceHistory || [
-                      { month: 'Apr', orders: 180 },
-                      { month: 'May', orders: 220 },
-                      { month: 'Jun', orders: 260 },
-                      { month: 'Jul', orders: 300 },
-                      { month: 'Aug', orders: 320 },
-                      { month: 'Sep', orders: 280 }
-                    ]}>
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
-                      />
-                      <Bar dataKey="orders" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={24} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Right: Joiner Performance Bar Chart */}
+            <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <h4 className="font-bold text-xs text-slate-800">Monthly Order Fulfillment (Last 6 Months)</h4>
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={activeJoiner.performanceHistory || [
+                    { month: 'Apr', orders: 180 },
+                    { month: 'May', orders: 220 },
+                    { month: 'Jun', orders: 260 },
+                    { month: 'Jul', orders: 300 },
+                    { month: 'Aug', orders: 320 },
+                    { month: 'Sep', orders: 280 }
+                  ]}>
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
+                    />
+                    <Bar dataKey="orders" fill="#15803d" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom Promo Banner */}
       <div className="bg-emerald-700 text-white p-4 rounded-2xl flex items-center justify-between shadow-md">
