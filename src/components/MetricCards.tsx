@@ -17,7 +17,7 @@ export const MetricCards: React.FC = () => {
   const activeHotels = hotels.filter(h => (h.status || 'Active') === 'Active').length;
   const activeJoiners = joiners.filter(j => (j.status || 'Active') === 'Active').length;
   const activeZones = zones.filter(z => (z.status || 'Active') === 'Active').length;
-  const pendingOrders = orders.filter(o => o.status === 'Pending' || o.orderStatus === 'Pending' || o.status === 'Processing').length;
+  const pendingOrders = orders.filter(o => (o.status as string) === 'Pending' || o.orderStatus === 'Pending' || (o.status as string) === 'Processing').length;
   const deliveredOrders = orders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
   const totalSales = orders.reduce((sum, o) => sum + (Number(o.amount || o.totalAmount) || 0), 0);
   
@@ -26,7 +26,7 @@ export const MetricCards: React.FC = () => {
     const comm = Number(o.commission || 0);
     if (comm > 0) return sum + comm;
     const amt = Number(o.amount || o.totalAmount || 0);
-    if (amt >= 1500 || o.isBonusEligible) return sum + 100;
+    if (amt >= 1500 || (o as any).isBonusEligible) return sum + 100;
     return sum + 100;
   }, 0);
 

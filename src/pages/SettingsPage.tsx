@@ -384,24 +384,6 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  // 7. Add User
-  const handleAddUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUserName.trim() || !newUserEmail.trim()) return;
-    const newUser = {
-      id: Date.now(),
-      name: newUserName.trim(),
-      email: newUserEmail.trim(),
-      role: newUserRole,
-      status: 'Active'
-    };
-    setUsersList(prev => [newUser, ...prev]);
-    setNewUserName('');
-    setNewUserEmail('');
-    setIsAddUserOpen(false);
-    showToast(`User ${newUser.name} created!`);
-  };
-
   const handleDeleteUser = (id: number, name: string) => {
     if (confirm(`Remove access for ${name}?`)) {
       setUsersList(prev => prev.filter(u => u.id !== id));

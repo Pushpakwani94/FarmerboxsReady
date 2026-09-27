@@ -105,8 +105,8 @@ export const JoinersPage: React.FC = () => {
     const hotelNameSet = new Set(liveHotels.map(h => (h.name || '').trim().toLowerCase()));
     const liveOrders = orders.filter(o => {
       const oHotel = (o.hotelName || '').trim().toLowerCase();
-      const oJoiner = (o.joiner || o.assignedJoiner || '').trim().toLowerCase();
-      const oJoinerId = String(o.joinerId || o.joinedBy || '').trim();
+      const oJoiner = (o.joiner || (o as any).assignedJoiner || '').trim().toLowerCase();
+      const oJoinerId = String((o as any).joinerId || (o as any).joinedBy || '').trim();
       return (
         (oHotel && hotelNameSet.has(oHotel)) ||
         (jName && oJoiner === jName) ||
@@ -316,17 +316,17 @@ export const JoinersPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left Column: Hotel Joiners List (7 cols) */}
         <div className="lg:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base text-slate-800">Hotel Joiners List</h3>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200">
+          <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1">
+            <div className="flex items-center gap-2 shrink-0">
+              <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Hotel Joiners List</h3>
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
                 {filteredJoiners.length} {filteredJoiners.length === 1 ? 'Joiner' : 'Joiners'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-40 sm:w-48">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative w-36 sm:w-44 shrink-0">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search by name, code..."
@@ -335,7 +335,7 @@ export const JoinersPage: React.FC = () => {
                     setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                  className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
                 />
               </div>
 
@@ -345,7 +345,7 @@ export const JoinersPage: React.FC = () => {
                   setSelectedZoneFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-700 cursor-pointer"
+                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
               >
                 <option value="All Zones">All Zones</option>
                 {zones.map(z => <option key={z.id} value={z.name}>{z.name}</option>)}
@@ -357,7 +357,7 @@ export const JoinersPage: React.FC = () => {
                   setSelectedStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-medium text-slate-700 cursor-pointer"
+                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
               >
                 <option value="All Status">All Status</option>
                 <option value="Active">Active</option>
@@ -366,7 +366,7 @@ export const JoinersPage: React.FC = () => {
 
               <button
                 onClick={() => setIsAddJoinerOpen(true)}
-                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs"
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" /> New Joiner
               </button>
@@ -421,15 +421,15 @@ export const JoinersPage: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                    <th className="py-2.5 px-2">#</th>
-                    <th className="py-2.5 px-2">Joiner Name</th>
-                    <th className="py-2.5 px-2">Mobile Number</th>
-                    <th className="py-2.5 px-2">Zone</th>
-                    <th className="py-2.5 px-2 text-center">Total Hotels</th>
-                    <th className="py-2.5 px-2 text-center">Total Orders</th>
-                    <th className="py-2.5 px-2 text-right">Total Earnings</th>
-                    <th className="py-2.5 px-2 text-center">Status</th>
-                    <th className="py-2.5 px-2 text-center">Actions</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">#</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Joiner Name</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Mobile Number</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Zone</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Hotels</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Total Orders</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Total Earnings</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -444,33 +444,35 @@ export const JoinersPage: React.FC = () => {
                           isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
                         }`}
                       >
-                        <td className="py-2.5 px-2 font-medium text-slate-500">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                        <td className="py-2.5 px-2 font-bold text-slate-800 flex items-center gap-2">
-                          <img
-                            src={j.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                            alt={j.name || 'Joiner'}
-                            className="w-6 h-6 rounded-full object-cover border border-emerald-600/30"
-                          />
-                          <span>{j.name || 'Unnamed Joiner'}</span>
-                          {j.addedBy === 'Admin' && (
-                            <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold">
-                              <Shield className="w-2 h-2 text-amber-600" /> Admin
-                            </span>
-                          )}
+                        <td className="py-2.5 px-3 font-medium text-slate-500 whitespace-nowrap">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={j.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                              alt={j.name || 'Joiner'}
+                              className="w-6 h-6 rounded-full object-cover border border-emerald-600/30 shrink-0"
+                            />
+                            <span>{j.name || 'Unnamed Joiner'}</span>
+                            {j.addedBy === 'Admin' && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold shrink-0">
+                                <Shield className="w-2 h-2 text-amber-600" /> Admin
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-2.5 px-2 text-slate-600">{j.mobile || '—'}</td>
-                        <td className="py-2.5 px-2 text-slate-700 font-medium">{j.zone || 'General'}</td>
-                        <td className="py-2.5 px-2 text-center font-bold text-slate-800">{stats.hotelsCount}</td>
-                        <td className="py-2.5 px-2 text-center font-bold text-slate-800">{stats.ordersCount}</td>
-                        <td className="py-2.5 px-2 text-right font-bold text-slate-900">₹{stats.totalEarnings.toLocaleString('en-IN')}</td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{j.mobile || '—'}</td>
+                        <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">{j.zone || 'General'}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.ordersCount}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.totalEarnings.toLocaleString('en-IN')}</td>
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                             (j.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}>
                             {j.status || 'Active'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-2 text-center">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={e => {
