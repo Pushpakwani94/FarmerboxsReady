@@ -74,8 +74,13 @@ const MainContent: React.FC = () => {
         return <PaymentsPage />;
       case 'Reports':
         return <ReportsPage />;
+      case 'Admins':
+      case 'Admin Management':
+      case 'Sub-Admins':
+      case 'Admin & Sub-Admins':
+        return <SettingsPage initialTab="User Management" />;
       case 'Settings':
-        return <SettingsPage />;
+        return <SettingsPage initialTab="Backup & Security" />;
       case 'Profile':
       case 'Admin Profile':
       case 'My Profile':

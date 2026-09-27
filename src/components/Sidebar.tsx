@@ -15,7 +15,8 @@ import {
   LogOut,
   Sprout,
   User,
-  Smartphone
+  Smartphone,
+  ShieldCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -39,13 +40,14 @@ export const Sidebar: React.FC = () => {
     { id: 'Payments', label: 'Payments', icon: CreditCard },
     { id: 'Reports', label: 'Reports', icon: BarChart3 },
     { id: 'Notifications', label: 'Notifications', icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
+    { id: 'Admins', label: 'Admin Management', icon: ShieldCheck, tag: 'Super' },
     { id: 'Settings', label: 'Settings', icon: Settings },
     { id: 'Profile', label: 'My Profile', icon: User },
     { id: 'Logout', label: 'Logout', icon: LogOut }
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col h-screen select-none flex-shrink-0 overflow-y-auto z-20">
+    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col h-screen flex-shrink-0 overflow-y-auto z-20">
       <div>
         {/* Brand Header with solid green background */}
         <div className="bg-[#15803d] px-4 py-3.5 flex items-center gap-3 text-white">

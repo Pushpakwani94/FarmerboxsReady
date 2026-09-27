@@ -34,7 +34,11 @@ import { saveRecord, clearLocalDummyCache } from '../firebase/dbService';
 import { currentFirebaseConfig } from '../firebase/config';
 import { authService, type AdminAccessRequest, type SubAdminAccount } from '../firebase/authService';
 
-export const SettingsPage: React.FC = () => {
+interface SettingsPageProps {
+  initialTab?: string;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup & Security' }) => {
   const {
     orders,
     zones,
@@ -51,8 +55,14 @@ export const SettingsPage: React.FC = () => {
     setActiveTab: setMainTab
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<string>('Backup & Security');
+  const [activeTab, setActiveTab] = useState<string>(() => initialTab);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Backup & Restore State
   const [lastBackupDate, setLastBackupDate] = useState<string>(() => {
