@@ -145,26 +145,58 @@ import {
 import { initialDriversList } from '../data/driversData';
 import { initialProductsList } from '../data/productsData';
 
-// Clean all legacy local caches from previous sessions
+// Helper to read persisted local data with fallback
+const getStoredOrFallback = <T,>(key: string, fallback: T[]): T[] => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(`farmerbox_${key}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn(`Error reading local storage for ${key}:`, e);
+  }
+  return fallback;
+};
+
+// Helper to save data to local storage
+const saveToLocal = (key: string, data: any) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`farmerbox_${key}`, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`Error persisting ${key} to local storage:`, e);
+  }
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const isConnected = isFirebaseConfigured();
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  useEffect(() => {
-    clearLocalDummyCache();
-  }, []);
+  // Primary application state — initialized from localStorage if available, else initial mock data
+  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', initialOrders));
+  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', initialZones));
+  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', initialJoiners));
+  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', initialDriversList));
+  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', initialHotels));
+  const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', initialProductsList));
+  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', initialPayments));
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', initialNotifications));
 
-  // Primary application state — initialized with core data and synchronized live with Cloud Firestore
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [zones, setZones] = useState<Zone[]>(initialZones);
-  const [joiners, setJoiners] = useState<Joiner[]>(initialJoiners);
-  const [drivers, setDrivers] = useState<Driver[]>(initialDriversList);
-  const [hotels, setHotels] = useState<Hotel[]>(initialHotels);
-  const [products, setProducts] = useState<Product[]>(initialProductsList);
-  const [payments, setPayments] = useState<PaymentTransaction[]>(initialPayments);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
+  // Sync state changes to localStorage
+  useEffect(() => { saveToLocal('orders', orders); }, [orders]);
+  useEffect(() => { saveToLocal('zones', zones); }, [zones]);
+  useEffect(() => { saveToLocal('joiners', joiners); }, [joiners]);
+  useEffect(() => { saveToLocal('drivers', drivers); }, [drivers]);
+  useEffect(() => { saveToLocal('hotels', hotels); }, [hotels]);
+  useEffect(() => { saveToLocal('products', products); }, [products]);
+  useEffect(() => { saveToLocal('payments', payments); }, [payments]);
+  useEffect(() => { saveToLocal('notifications', notifications); }, [notifications]);
 
-  // Subscriptions strictly to Cloud Firestore
+  // Subscriptions strictly to Cloud Firestore (only overwrite when Firestore has actual records)
   useEffect(() => {
     const handleErr = (err: Error) => {
       setFirestoreError(err.message || 'Firestore connection error');
@@ -175,60 +207,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
-      const data = z && z.length > 0 ? z : initialZones;
-      setZones(data);
-      setSelectedZone(prev => prev ? (data.find(item => String(item.id) === String(prev.id)) || data[0] || null) : (data[0] || null));
+      if (z && z.length > 0) {
+        setZones(z);
+        setSelectedZone(prev => prev ? (z.find(item => String(item.id) === String(prev.id)) || z[0] || null) : (z[0] || null));
+      }
     }, handleErr);
 
     const unsubJoiners = subscribeToCollection<Joiner>('joiners', (j) => {
-      const data = j && j.length > 0 ? j : initialJoiners;
-      setJoiners(data);
-      setSelectedJoiner(prev => prev ? (data.find(item => String(item.id) === String(prev.id)) || data[0] || null) : (data[0] || null));
+      if (j && j.length > 0) {
+        setJoiners(j);
+        setSelectedJoiner(prev => prev ? (j.find(item => String(item.id) === String(prev.id)) || j[0] || null) : (j[0] || null));
+      }
     }, handleErr);
 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {
-      const data = d && d.length > 0 ? d : initialDriversList;
-      setDrivers(data);
-      setSelectedDriver(prev => prev ? (data.find(item => String(item.id) === String(prev.id)) || data[0] || null) : (data[0] || null));
+      if (d && d.length > 0) {
+        setDrivers(d);
+        setSelectedDriver(prev => prev ? (d.find(item => String(item.id) === String(prev.id)) || d[0] || null) : (d[0] || null));
+      }
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<Hotel>('hotels', (h) => {
-      const data = h && h.length > 0 ? h : initialHotels;
-      setHotels(data);
-      setSelectedHotel(prev => prev ? (data.find(item => String(item.id) === String(prev.id)) || h[0] || null) : (h[0] || null));
+      if (h && h.length > 0) {
+        setHotels(h);
+        setSelectedHotel(prev => prev ? (h.find(item => String(item.id) === String(prev.id)) || h[0] || null) : (h[0] || null));
+      }
     }, handleErr);
 
     const unsubProducts = subscribeToCollection<Product>('products', (p) => {
-      const data = p && p.length > 0 ? p : initialProductsList;
-      const initialMap = new Map(initialProductsList.map(item => [item.id, item]));
-      const normalized = data.map(item => {
-        const initialMatch = initialMap.get(item.id);
-        const nameLower = (item.name || '').toLowerCase();
-        const unitLower = (item.unit || '').toLowerCase();
+      if (p && p.length > 0) {
+        const initialMap = new Map(initialProductsList.map(item => [item.id, item]));
+        const normalized = p.map(item => {
+          const initialMatch = initialMap.get(item.id);
+          const nameLower = (item.name || '').toLowerCase();
+          const unitLower = (item.unit || '').toLowerCase();
 
-        let catalog: 'B2C' | 'B2B' | 'Both' = initialMatch?.catalogType || item.catalogType || item.targetCatalog || 'Both';
-        if (nameLower.startsWith('b2b') || unitLower.includes('bag (50') || unitLower.includes('sack')) {
-          catalog = 'B2B';
-        } else if (item.category === 'Fruits' || item.category === 'Citrus & Melons' || item.category === 'Vegetables' || item.category === 'Root Veggies' || item.category === 'Leafy Greens' || item.category === 'Exotic Veggies' || item.category === 'Herbs & Seasoning') {
-          // Fresh produce and all fruits are dual-channel: available in both B2C and B2B
-          catalog = 'Both';
-        }
+          let catalog: 'B2C' | 'B2B' | 'Both' = initialMatch?.catalogType || item.catalogType || item.targetCatalog || 'Both';
+          if (nameLower.startsWith('b2b') || unitLower.includes('bag (50') || unitLower.includes('sack')) {
+            catalog = 'B2B';
+          } else if (item.category === 'Fruits' || item.category === 'Citrus & Melons' || item.category === 'Vegetables' || item.category === 'Root Veggies' || item.category === 'Leafy Greens' || item.category === 'Exotic Veggies' || item.category === 'Herbs & Seasoning') {
+            catalog = 'Both';
+          }
 
-        return {
-          ...item,
-          catalogType: catalog,
-          targetCatalog: catalog,
-          b2bPrice: item.b2bPrice ?? initialMatch?.b2bPrice ?? item.salePrice,
-          b2cPrice: item.b2cPrice ?? initialMatch?.b2cPrice ?? item.salePrice,
-          minOrderQty: item.minOrderQty ?? initialMatch?.minOrderQty ?? 1,
-          image: resolveProductImage(item.name, item.category, item.image || (item as any).imageUrl),
-          images: (item.images && item.images.length > 0)
-            ? item.images.map(img => resolveProductImage(item.name, item.category, img))
-            : [resolveProductImage(item.name, item.category, item.image || (item as any).imageUrl)]
-        };
-      });
-      setProducts(normalized);
-      setSelectedProduct(prev => prev ? (normalized.find(item => String(item.id) === String(prev.id)) || normalized[0] || null) : (normalized[0] || null));
+          return {
+            ...item,
+            catalogType: catalog,
+            targetCatalog: catalog,
+            b2bPrice: item.b2bPrice ?? initialMatch?.b2bPrice ?? item.salePrice,
+            b2cPrice: item.b2cPrice ?? initialMatch?.b2cPrice ?? item.salePrice,
+            minOrderQty: item.minOrderQty ?? initialMatch?.minOrderQty ?? 1,
+            image: resolveProductImage(item.name, item.category, item.image || (item as any).imageUrl),
+            images: (item.images && item.images.length > 0)
+              ? item.images.map(img => resolveProductImage(item.name, item.category, img))
+              : [resolveProductImage(item.name, item.category, item.image || (item as any).imageUrl)]
+          };
+        });
+        setProducts(normalized);
+        setSelectedProduct(prev => prev ? (normalized.find(item => String(item.id) === String(prev.id)) || normalized[0] || null) : (normalized[0] || null));
+      }
     }, handleErr);
 
     const unsubPayments = subscribeToCollection<PaymentTransaction>('payments', (data) => {
