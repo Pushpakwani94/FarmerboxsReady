@@ -17,10 +17,12 @@ export const Header: React.FC = () => {
     adminProfile,
     setIsAdminProfileOpen,
     logoutAdmin,
-    notifications
+    notifications,
+    toggleMobileMenu
   } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMobileSearchVisible, setIsMobileSearchVisible] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -43,30 +45,39 @@ export const Header: React.FC = () => {
   const hasResults = matchingHotels.length > 0 || matchingOrders.length > 0 || matchingJoiners.length > 0;
 
   return (
-    <header className="bg-white border-b border-slate-200/80 px-6 py-3 flex items-center justify-between shrink-0 z-20">
+    <header className="bg-white border-b border-slate-200/80 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shrink-0 z-20">
       {/* Left: Hamburger & Title */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button
-          onClick={() => setActiveTab('Dashboard')}
-          className="text-slate-600 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
-          title="Toggle Navigation / Return to Dashboard"
+          onClick={toggleMobileMenu}
+          className="text-slate-600 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer shrink-0"
+          title="Toggle Navigation Menu"
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div>
-          <h2 className="text-base font-bold text-slate-900 tracking-tight">
+        <div className="min-w-0">
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">
             {activeTab === 'Dashboard' ? 'Admin Dashboard' : activeTab === 'B2C Catalog' ? 'B2C Fresh Retail Catalog' : `${activeTab} Management`}
           </h2>
-          <p className="text-[11px] text-slate-500 font-normal leading-tight">
+          <p className="text-[10px] sm:text-[11px] text-slate-500 font-normal leading-tight hidden sm:block truncate">
             {activeTab === 'B2C Catalog' ? 'Manage consumer household portions, retail vegetables & fruits' : 'Manage hotels, joiners, orders and deliver fresh vegetables'}
           </p>
         </div>
       </div>
 
       {/* Right: Search, Notifications, Profile, Date */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Mobile Search Toggle */}
+        <button
+          onClick={() => setIsMobileSearchVisible(!isMobileSearchVisible)}
+          className="md:hidden p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
+          title="Search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         {/* Search Bar with live search dropdown */}
-        <div className="relative hidden md:block w-72">
+        <div className="relative hidden md:block w-56 lg:w-72">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"

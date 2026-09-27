@@ -9,7 +9,7 @@ import { QuickActions } from '../components/QuickActions';
 
 export const Dashboard: React.FC = () => {
   return (
-    <div className="space-y-4 p-5 max-w-[1600px] mx-auto">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-5">
 
       {/* 8 Metric Cards Grid (2 rows of 4) */}
       <MetricCards />

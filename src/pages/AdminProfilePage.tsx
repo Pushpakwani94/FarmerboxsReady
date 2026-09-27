@@ -132,7 +132,7 @@ export const AdminProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6 select-none">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-6 select-none">
       {/* Toast Alert */}
       {saveSuccess && (
         <div className="fixed top-5 right-6 z-50 px-4 py-3 bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2.5 shadow-xl border border-emerald-500 animate-in fade-in slide-in-from-top-4">
@@ -162,7 +162,7 @@ export const AdminProfilePage: React.FC = () => {
       </div>
 
       {/* Top Metric Cards (4 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-center">
         <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-100 flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-[#15803d] text-white flex items-center justify-center font-bold">
             <Shield className="w-6 h-6" />

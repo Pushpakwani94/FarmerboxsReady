@@ -249,7 +249,7 @@ export const InventoryPage: React.FC = () => {
   const outOfStockCount = products.filter(p => (Number(p.stock) || 0) <= 0).length;
 
   return (
-    <div className="p-6 max-w-[1700px] mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
       
       {/* 1. TOP DUAL CATALOG SWITCHER BANNER */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
@@ -276,7 +276,7 @@ export const InventoryPage: React.FC = () => {
           </div>
 
           {/* Segmented Catalog Tabs */}
-          <div className="flex items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 shrink-0 self-start lg:self-auto">
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 shrink-0 self-start lg:self-auto">
             {/* All Products Tab */}
             <button
               onClick={() => {
@@ -315,7 +315,7 @@ export const InventoryPage: React.FC = () => {
               }`}
             >
               <ShoppingBag className={`w-3.5 h-3.5 ${activeCatalogTab === 'B2C' ? 'text-emerald-100' : 'text-emerald-600'}`} />
-              <span>🛍️ B2C Catalog (Veggies & Fruits)</span>
+              <span>🛍️ B2C (Retail)</span>
               <span
                 className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
                   activeCatalogTab === 'B2C'
@@ -340,7 +340,7 @@ export const InventoryPage: React.FC = () => {
               }`}
             >
               <Building2 className={`w-3.5 h-3.5 ${activeCatalogTab === 'B2B' ? 'text-blue-100' : 'text-blue-600'}`} />
-              <span>🏢 B2B Catalog (Wholesale)</span>
+              <span>🏢 B2B (Wholesale)</span>
               <span
                 className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
                   activeCatalogTab === 'B2B'
@@ -356,7 +356,7 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* 2. TOP METRIC CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Total Products */}
         <div className="bg-[#F0FDF4] p-4 rounded-xl border border-emerald-100/80 flex items-center gap-3.5 shadow-2xs">
           <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">

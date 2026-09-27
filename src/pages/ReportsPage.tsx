@@ -320,10 +320,10 @@ export const ReportsPage: React.FC = () => {
   }, [joiners]);
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-6">
       
       {/* Top Header Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 items-center">
         {/* Total Revenue */}
         <div className="bg-emerald-50/80 p-4 rounded-2xl border border-emerald-100 flex items-center gap-3.5 shadow-2xs">
           <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
@@ -448,7 +448,7 @@ export const ReportsPage: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-200">
           
           {/* Commission KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 rounded-2xl text-white shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider">Total Commission Earned</span>

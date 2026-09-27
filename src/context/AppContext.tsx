@@ -93,6 +93,9 @@ interface AppContextType {
   setIsAdminProfileOpen: (open: boolean) => void;
   isLogoutConfirmOpen: boolean;
   setIsLogoutConfirmOpen: (open: boolean) => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
+  toggleMobileMenu: () => void;
 
   // Admin Profile
   adminProfile: AdminProfile;
@@ -326,6 +329,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
   const [isAdminProfileOpen, setIsAdminProfileOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
   const loginAdmin = async (email: string, password?: string): Promise<boolean> => {
     const user = await authService.loginWithPhoneOrEmail(email, password, 'admin');
@@ -1059,6 +1064,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAdminProfileOpen,
         isLogoutConfirmOpen,
         setIsLogoutConfirmOpen,
+        isMobileMenuOpen,
+        setIsMobileMenuOpen,
+        toggleMobileMenu,
         adminProfile,
         updateAdminProfile,
         markNotificationsAsRead,

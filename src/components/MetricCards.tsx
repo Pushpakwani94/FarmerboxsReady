@@ -114,7 +114,7 @@ export const MetricCards: React.FC = () => {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
       {cards.map((card, idx) => {
         const Icon = card.icon;
         return (
