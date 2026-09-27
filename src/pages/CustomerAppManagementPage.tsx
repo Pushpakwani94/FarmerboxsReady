@@ -96,9 +96,9 @@ export const CustomerAppManagementPage: React.FC = () => {
   const activePresetObj = DEVICE_PRESETS.find(p => p.name === selectedPreset) || DEVICE_PRESETS[1];
 
   return (
-    <div className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs">
         <div>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-sm">

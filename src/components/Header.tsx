@@ -302,6 +302,105 @@ export const Header: React.FC = () => {
           <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </div>
       </div>
+
+      {/* Expandable Mobile Search Bar */}
+      {isMobileSearchVisible && (
+        <div className="md:hidden absolute left-0 right-0 top-full bg-white border-b border-slate-200 p-3 shadow-lg z-50 animate-in slide-in-from-top-2">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              placeholder="Search hotels, orders, joiners..."
+              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white placeholder:text-slate-400"
+            />
+            <button
+              onClick={() => {
+                setIsMobileSearchVisible(false);
+                setSearchQuery('');
+                setIsSearchOpen(false);
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Mobile Search Results */}
+          {trimmed && (
+            <div className="mt-2 bg-white rounded-xl max-h-60 overflow-y-auto divide-y divide-slate-100">
+              {!hasResults ? (
+                <div className="p-3 text-center text-xs text-slate-500">No matching results</div>
+              ) : (
+                <div className="space-y-1 pt-1">
+                  {matchingOrders.map(o => (
+                    <div
+                      key={o.id}
+                      onClick={() => {
+                        setSelectedOrder(o);
+                        setIsMobileSearchVisible(false);
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="font-bold text-slate-800">{o.id}</span>
+                        <span className="text-slate-600 truncate max-w-[140px]">({o.hotelName})</span>
+                      </div>
+                      <span className="text-emerald-700 font-bold">₹{o.amount}</span>
+                    </div>
+                  ))}
+                  {matchingHotels.map(h => (
+                    <div
+                      key={h.id}
+                      onClick={() => {
+                        setSelectedHotel(h);
+                        setActiveTab('Hotels');
+                        setIsMobileSearchVisible(false);
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="font-semibold text-slate-800 truncate max-w-[140px]">{h.name}</span>
+                      </div>
+                      <span className="text-slate-500 text-[11px]">{h.zone}</span>
+                    </div>
+                  ))}
+                  {matchingJoiners.map(j => (
+                    <div
+                      key={j.id}
+                      onClick={() => {
+                        setSelectedJoiner(j);
+                        setActiveTab('Hotel Joiners');
+                        setIsMobileSearchVisible(false);
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Users className="w-3.5 h-3.5 text-orange-600" />
+                        <span className="font-semibold text-slate-800 truncate max-w-[140px]">{j.name}</span>
+                      </div>
+                      <span className="text-slate-500 text-[11px]">{j.zone}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 };

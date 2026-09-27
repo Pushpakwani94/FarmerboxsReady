@@ -155,9 +155,9 @@ export const JoinerMobileAppManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="p-5 max-w-[1600px] mx-auto space-y-5">
+    <div className="p-3.5 sm:p-5 sm:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-5">
       {/* Top Header Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#15803d] to-emerald-500 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-700/20 shrink-0">

@@ -70,25 +70,25 @@ export const LoginPage: React.FC = () => {
       <div className="absolute top-0 left-0 right-0 h-80 bg-gradient-to-b from-[#15803d] via-emerald-800 to-slate-900 pointer-events-none" />
 
       {/* Top Header */}
-      <header className="relative z-10 px-6 py-4 max-w-5xl mx-auto w-full flex items-center justify-between text-white">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 px-4 sm:px-6 py-3 sm:py-4 max-w-5xl mx-auto w-full flex items-center justify-between text-white">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <img
             src="/farmerbox_app_icon.png"
             alt="FarmerBoxs Logo"
-            className="w-10 h-10 rounded-xl object-contain bg-white p-1 shadow-md shrink-0"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain bg-white p-1 shadow-md shrink-0"
           />
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-black text-lg tracking-tight leading-none text-white">FarmerBoxs</h1>
-              <span className="text-[10px] bg-white/20 text-white font-mono font-bold px-1.5 py-0.2 rounded">v2.5</span>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="font-black text-base sm:text-lg tracking-tight leading-none text-white">FarmerBoxs</h1>
+              <span className="text-[9px] sm:text-[10px] bg-white/20 text-white font-mono font-bold px-1.5 py-0.2 rounded">v2.5</span>
             </div>
-            <p className="text-[11px] text-emerald-100 font-medium mt-0.5">Farm Fresh to Your Door</p>
+            <p className="text-[10px] sm:text-[11px] text-emerald-100 font-medium mt-0.5">Farm Fresh to Your Door</p>
           </div>
         </div>
 
         {/* Security & Cloud Status Pill */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold text-[11px]">
+          <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold text-[10px] sm:text-[11px]">
             <span className={`w-2 h-2 rounded-full ${isDatabaseConnected ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`} />
             <span>{isDatabaseConnected ? 'System Secured' : 'Active'}</span>
           </span>
@@ -96,29 +96,29 @@ export const LoginPage: React.FC = () => {
       </header>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-2">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-900/15 border border-slate-200 overflow-hidden">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 my-auto">
+        <div className="w-full max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-2xl shadow-slate-900/15 border border-slate-200 overflow-hidden">
           
           {/* Card Top Banner */}
-          <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-[#15803d] p-6 text-white text-center relative">
-            <div className="w-14 h-14 rounded-2xl bg-white p-1 shadow-lg mx-auto mb-3 flex items-center justify-center">
+          <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-[#15803d] p-4 sm:p-6 text-white text-center relative">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white p-1 shadow-lg mx-auto mb-2 sm:mb-3 flex items-center justify-center">
               <img
                 src="/farmerbox_app_icon.png"
                 alt="FarmerBox"
                 className="w-full h-full object-contain rounded-xl"
               />
             </div>
-            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-400/40 text-[10.5px] font-bold text-emerald-200 mb-1">
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-900/60 border border-emerald-400/40 text-[10px] sm:text-[10.5px] font-bold text-emerald-200 mb-1">
               <KeyRound className="w-3 h-3 text-emerald-300" />
               <span>Administrative Portal</span>
             </div>
-            <h2 className="text-xl font-extrabold tracking-tight text-white">Super Admin Sign In</h2>
-            <p className="text-xs text-emerald-100 font-medium mt-1">
+            <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white">Super Admin Sign In</h2>
+            <p className="text-[11px] sm:text-xs text-emerald-100 font-medium mt-0.5 sm:mt-1">
               FarmerBox Operations & Supply Chain Console
             </p>
           </div>
 
-          <div className="p-6 sm:p-7 space-y-5">
+          <div className="p-4 sm:p-7 space-y-4 sm:space-y-5">
             {/* Error Message */}
             {errorMsg && (
               <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium flex items-start gap-2.5 animate-in fade-in">
