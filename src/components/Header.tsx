@@ -26,6 +26,16 @@ export const Header: React.FC = () => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  // Keep live date updated in real time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Close profile dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -296,10 +306,10 @@ export const Header: React.FC = () => {
           <LogOut className="w-4 h-4" />
         </button>
 
-        {/* Date Display */}
-        <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-500 font-medium bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+        {/* Dynamic Date Display */}
+        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-600 font-semibold bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg shrink-0">
+          <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span className="whitespace-nowrap">{currentDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </div>
       </div>
 

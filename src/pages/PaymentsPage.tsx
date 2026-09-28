@@ -139,7 +139,7 @@ export const PaymentsPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <div className="border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5 text-slate-600 font-medium">
-                📅 11 Sep 2026 - 11 Sep 2026
+                📅 {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} - {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
 
               <select className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700">
