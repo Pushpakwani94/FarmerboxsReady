@@ -34,8 +34,6 @@ export const Sidebar: React.FC = () => {
 
   const menuItems = [
     { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'Customer Mobile App', label: 'Customer B2C App', icon: Smartphone, tag: 'B2C' },
-    { id: 'Mobile App', label: 'Joiner Mobile App', icon: Smartphone, tag: 'B2B' },
     { id: 'Zones', label: 'Zones', icon: MapPin },
     { id: 'Hotel Joiners', label: 'Hotel Joiners', icon: Users },
     { id: 'Hotels', label: 'Hotels', icon: Building2 },
@@ -50,6 +48,8 @@ export const Sidebar: React.FC = () => {
     { id: 'Admins', label: 'Admin Management', icon: ShieldCheck, tag: 'Super' },
     { id: 'Settings', label: 'Settings', icon: Settings },
     { id: 'Profile', label: 'My Profile', icon: User },
+    { id: 'Customer Mobile App', label: 'Customer B2C App', icon: Smartphone, tag: 'B2C' },
+    { id: 'Mobile App', label: 'Joiner Mobile App', icon: Smartphone, tag: 'B2B' },
     { id: 'Logout', label: 'Logout', icon: LogOut }
   ];
 

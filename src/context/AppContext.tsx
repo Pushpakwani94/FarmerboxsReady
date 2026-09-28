@@ -384,21 +384,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     authService.logout().catch(() => {});
   };
 
-  // Admin Profile stored in Firestore 'settings/admin_profile'
-  const [adminProfile, setAdminProfile] = useState<AdminProfile>({
-    name: 'Pushpak Wani',
-    role: 'Super Admin',
-    email: 'admin@farmerbox.com',
-    phone: '+91 98765 43210',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
-    zone: 'All Zones (HQ)',
-    location: 'Pune, Maharashtra',
-    department: 'Operations & Management',
-    joinedDate: 'Jan 2025',
-    bio: 'Overseeing daily vegetable supply chain operations, hotel partner onboardings, and automated driver dispatch across Pune metropolitan area.',
-    emergencyContact: '+91 98220 11223 (Operations Manager)',
-    timezone: '(GMT+05:30) Asia/Kolkata',
-    language: 'English (India)'
+  // Admin Profile stored in Firestore 'settings/admin_profile' + LocalStorage cache
+  const [adminProfile, setAdminProfile] = useState<AdminProfile>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('farmerbox_admin_profile');
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return {
+      name: 'Pushpak Wani',
+      role: 'Super Admin',
+      email: 'admin@farmerbox.com',
+      phone: '+91 98765 43210',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+      zone: 'All Zones (HQ)',
+      location: 'Pune, Maharashtra',
+      department: 'Operations & Management',
+      joinedDate: 'Jan 2025',
+      bio: 'Overseeing daily vegetable supply chain operations, hotel partner onboardings, and automated driver dispatch across Pune metropolitan area.',
+      emergencyContact: '+91 98220 11223 (Operations Manager)',
+      timezone: '(GMT+05:30) Asia/Kolkata',
+      language: 'English (India)'
+    };
   });
 
   useEffect(() => {
@@ -406,7 +418,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const unsub = onSnapshot(doc(db, 'settings', 'admin_profile'), (snap) => {
         if (snap.exists()) {
-          setAdminProfile(prev => ({ ...prev, ...(snap.data() as AdminProfile) }));
+          const remoteData = snap.data() as AdminProfile;
+          setAdminProfile(prev => {
+            const merged = { ...prev, ...remoteData };
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('farmerbox_admin_profile', JSON.stringify(merged));
+              } catch (e) {}
+            }
+            return merged;
+          });
         }
       });
       return () => unsub();
@@ -418,6 +439,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateAdminProfile = async (data: Partial<AdminProfile>) => {
     const updated = { ...adminProfile, ...data };
     setAdminProfile(updated);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('farmerbox_admin_profile', JSON.stringify(updated));
+      } catch (e) {}
+    }
     if (isFirebaseConfigured() && db) {
       try {
         await setDoc(doc(db, 'settings', 'admin_profile'), updated, { merge: true });

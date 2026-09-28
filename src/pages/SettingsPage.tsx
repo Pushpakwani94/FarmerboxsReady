@@ -102,7 +102,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
 
   // User Management State (Legacy Table)
   const [usersList, setUsersList] = useState([
-    { id: 1, name: 'Pushpak Wani', email: 'admin@farmerbox.com', role: 'Super Admin', status: 'Active' },
+    { id: 1, name: adminProfile.name || 'Super Admin', email: adminProfile.email || 'admin@farmerbox.com', role: 'Super Admin', status: 'Active' },
     { id: 2, name: 'Sneha Patil', email: 'sneha@farmerbox.com', role: 'Admin', status: 'Active' },
     { id: 3, name: 'Amit Shinde', email: 'amit@farmerbox.com', role: 'Operations', status: 'Active' },
     { id: 4, name: 'Priya Deshmukh', email: 'priya@farmerbox.com', role: 'Finance', status: 'Active' },
@@ -159,22 +159,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
   };
 
   const handleApproveAccessRequest = (req: AdminAccessRequest) => {
-    const updated = authService.updateAdminAccessRequestStatus(req.id, 'APPROVED', 'Pushpak Wani (Super Admin)');
+    const updated = authService.updateAdminAccessRequestStatus(req.id, 'APPROVED', `${adminProfile.name || 'Super Admin'} (Super Admin)`);
     setAccessRequests(updated);
     showToast(`Access GRANTED for ${req.name} (${req.requestedRole}). User can now log in!`);
   };
 
   const handleRejectAccessRequest = (req: AdminAccessRequest) => {
-    const updated = authService.updateAdminAccessRequestStatus(req.id, 'REJECTED', 'Pushpak Wani (Super Admin)');
+    const updated = authService.updateAdminAccessRequestStatus(req.id, 'REJECTED', `${adminProfile.name || 'Super Admin'} (Super Admin)`);
     setAccessRequests(updated);
     showToast(`Access REJECTED for ${req.name}.`);
   };
 
   // Security Audit Log
   const [auditLogs, setAuditLogs] = useState([
-    { id: 1, action: 'Admin logged into console', user: 'Pushpak Wani', ip: '192.168.1.21', status: 'Success', time: 'Today, 04:55 PM' },
+    { id: 1, action: 'Admin logged into console', user: adminProfile.name || 'Super Admin', ip: '192.168.1.21', status: 'Success', time: 'Today, 04:55 PM' },
     { id: 2, action: 'Firestore real-time sync connected', user: 'System', ip: 'Cloud', status: 'Success', time: 'Today, 04:50 PM' },
-    { id: 3, action: 'Updated security policy', user: 'Pushpak Wani', ip: '192.168.1.21', status: 'Success', time: 'Yesterday, 11:20 AM' },
+    { id: 3, action: 'Updated security policy', user: adminProfile.name || 'Super Admin', ip: '192.168.1.21', status: 'Success', time: 'Yesterday, 11:20 AM' },
     { id: 4, action: 'Automatic database backup completed', user: 'System Worker', ip: 'Cron', status: 'Success', time: '13 Sep 2026, 02:00 AM' }
   ]);
 
@@ -1027,7 +1027,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Only <strong>Super Admin (Pushpak Wani)</strong> can grant access. Others cannot join the console without approval.
+                  Only <strong>Super Admin ({adminProfile.name || 'Super Admin'})</strong> can grant access. Others cannot join the console without approval.
                 </p>
               </div>
 
@@ -1112,7 +1112,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
                             </div>
                           ) : (
                             <div className="text-[10px] text-slate-400 font-medium">
-                              {req.status === 'APPROVED' ? `Granted by Pushpak Wani` : `Declined by Super Admin`}
+                              {req.status === 'APPROVED' ? `Granted by ${adminProfile.name || 'Super Admin'}` : `Declined by Super Admin`}
                             </div>
                           )}
                         </td>
@@ -1124,7 +1124,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
             )}
           </div>
 
-          {/* 2. Sub-Admins & Zone Admins Managed by Super Admin Pushpak Wani */}
+          {/* 2. Sub-Admins & Zone Admins Managed by Super Admin */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -1135,7 +1135,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Super Admin (Pushpak Wani) creates and assigns sub-admins to specific operational zones with granular module permissions.
+                  Super Admin ({adminProfile.name || 'Super Admin'}) creates and assigns sub-admins to specific operational zones with granular module permissions.
                 </p>
               </div>
               <button
@@ -1162,19 +1162,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {/* Pushpak Wani Super Admin Row */}
+                  {/* Super Admin Row */}
                   <tr className="bg-emerald-50/50 hover:bg-emerald-50">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
                         <img
-                          src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                          alt="Pushpak Wani"
+                          src={adminProfile.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"}
+                          alt={adminProfile.name}
                           className="w-7 h-7 rounded-full object-cover border border-emerald-600"
                         />
                         <div>
                           <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                            <span>Pushpak Wani</span>
-                            <span className="text-[9px] bg-emerald-700 text-white font-black px-1.5 py-0.2 rounded">SUPER ADMIN (OWNER)</span>
+                            <span>{adminProfile.name}</span>
+                            <span className="text-[9px] bg-emerald-700 text-white font-black px-1.5 py-0.2 rounded">{adminProfile.role.toUpperCase()} (OWNER)</span>
                           </div>
                           <span className="text-[10px] text-slate-500 font-mono">HQ-SUPER-001</span>
                         </div>
@@ -1268,7 +1268,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <h3 className="font-bold text-sm text-slate-800">Role & Permission Hierarchy</h3>
-              <p className="text-[11px] text-slate-500">Privilege matrix governed by Super Admin Pushpak Wani</p>
+              <p className="text-[11px] text-slate-500">Privilege matrix governed by Super Admin ({adminProfile.name || 'Super Admin'})</p>
             </div>
             <button
               onClick={() => setIsAddSubAdminOpen(true)}
@@ -1291,7 +1291,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {[
-                  { id: 1, role: 'Super Admin', scope: 'All Zones (HQ)', desc: 'Full root authority over all modules, zones, payouts & security', count: '1 (Pushpak Wani)' },
+                  { id: 1, role: 'Super Admin', scope: 'All Zones (HQ)', desc: 'Full root authority over all modules, zones, payouts & security', count: `1 (${adminProfile.name || 'Super Admin'})` },
                   { id: 2, role: 'Zone Admin', scope: 'Specific Assigned Zone', desc: 'Manage orders, hotels, joiners and driver routes in their assigned zone', count: `${subAdminsList.filter(s => s.role === 'Zone Admin').length} Active` },
                   { id: 3, role: 'Operations Sub-Admin', scope: 'Multi-Zone Fleet', desc: 'Dispatch routes, morning wholesale mandi procurement and logistics', count: `${subAdminsList.filter(s => s.role === 'Operations Sub-Admin').length} Active` },
                   { id: 4, role: 'Finance Sub-Admin', scope: 'Accounts & Payouts', desc: 'Weekly joiner commission audits, GST invoice generation & payment batches', count: `${subAdminsList.filter(s => s.role === 'Finance Sub-Admin').length} Active` }
@@ -1321,7 +1321,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-slate-900">Create Sub-Admin / Zone Admin</h3>
-                  <p className="text-[11px] text-slate-500">Authorized by Super Admin Pushpak Wani</p>
+                  <p className="text-[11px] text-slate-500">Authorized by Super Admin ({adminProfile.name || 'Super Admin'})</p>
                 </div>
               </div>
               <button
