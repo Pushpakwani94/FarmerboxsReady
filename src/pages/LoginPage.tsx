@@ -5,7 +5,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Sparkles,
   Shield,
   CheckCircle2,
   AlertCircle,
@@ -55,20 +54,6 @@ export const LoginPage: React.FC = () => {
       await loginAdmin(email.trim(), password, rememberMe);
     } catch (err: any) {
       setErrorMsg(err.message || 'Access Denied: Invalid credentials or unauthorized admin account.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuickSuperAdminLogin = async () => {
-    setEmail('admin@farmerbox.com');
-    setPassword('Admin@123');
-    setIsLoading(true);
-    setErrorMsg(null);
-    try {
-      await loginAdmin('admin@farmerbox.com', 'Admin@123', rememberMe);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Login error');
     } finally {
       setIsLoading(false);
     }
@@ -208,29 +193,6 @@ export const LoginPage: React.FC = () => {
                   </>
                 )}
               </button>
-
-              {/* 1-Click Fast Login as Pushpak Wani (Super Admin) */}
-              <div className="pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={handleQuickSuperAdminLogin}
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-xl flex items-center justify-between cursor-pointer transition-all shadow-2xs group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                      alt="Pushpak Wani"
-                      className="w-6 h-6 rounded-full object-cover border border-emerald-600 shrink-0"
-                    />
-                    <div className="text-left leading-tight">
-                      <p className="font-extrabold text-slate-900 text-[11px]">Pushpak Wani</p>
-                      <p className="text-[9.5px] text-emerald-700 font-semibold">Super Admin (1-Click Login)</p>
-                    </div>
-                  </div>
-                  <Sparkles className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-                </button>
-              </div>
             </form>
 
           </div>
