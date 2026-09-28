@@ -5,7 +5,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Shield,
   CheckCircle2,
   AlertCircle,
   KeyRound
@@ -173,10 +172,6 @@ export const LoginPage: React.FC = () => {
                   />
                   <span className="text-slate-600 font-medium">Keep me signed in</span>
                 </label>
-                <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                  <Shield className="w-3 h-3 text-emerald-600" />
-                  <span>256-bit Encrypted</span>
-                </span>
               </div>
 
               {/* Primary Sign In Button */}
