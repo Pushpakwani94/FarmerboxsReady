@@ -414,9 +414,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       throw new Error('Access denied. Only authorized administrators can log in to FarmerBox Admin Panel.');
     }
     setIsAdminLoggedIn(true);
+
+    // Dynamically set admin profile to the logged-in user's name and email
+    const updatedProfile: AdminProfile = {
+      ...adminProfile,
+      name: user.name || 'Admin',
+      email: user.email || (email.includes('@') ? email : `${email}@farmerbox.com`),
+      phone: user.phone || user.phoneNumber || adminProfile.phone,
+      role: (user.name && user.name.toLowerCase().includes('pushpak')) ? 'Super Admin' : 'Admin'
+    };
+    setAdminProfile(updatedProfile);
+
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('farmerbox_admin_logged_in', 'true');
       sessionStorage.setItem('farmerbox_admin_email', user.email);
+      localStorage.setItem('farmerbox_admin_profile', JSON.stringify(updatedProfile));
 
       if (rememberMe) {
         localStorage.setItem('farmerbox_admin_logged_in', 'true');
@@ -442,6 +454,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('farmerbox_admin_logged_in', 'false');
       localStorage.removeItem('farmerbox_admin_email');
       localStorage.removeItem('farmerbox_remember_me');
+      localStorage.removeItem('farmerbox_admin_profile');
       sessionStorage.removeItem('farmerbox_admin_logged_in');
       sessionStorage.removeItem('farmerbox_admin_email');
     }
@@ -484,7 +497,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (snap.exists()) {
           const remoteData = snap.data() as AdminProfile;
           setAdminProfile(prev => {
-            const merged = { ...prev, ...remoteData };
+            const currentEmail = typeof window !== 'undefined' ? (localStorage.getItem('farmerbox_admin_email') || '') : '';
+            const isCustomUser = prev.name && prev.name !== 'Pushpak Wani' && !currentEmail.includes('pushpak');
+            const merged = {
+              ...prev,
+              ...remoteData,
+              name: isCustomUser ? prev.name : (remoteData.name || prev.name),
+              email: isCustomUser ? prev.email : (remoteData.email || prev.email),
+              role: isCustomUser ? prev.role : (remoteData.role || prev.role)
+            };
             if (typeof window !== 'undefined') {
               try {
                 localStorage.setItem('farmerbox_admin_profile', JSON.stringify(merged));
