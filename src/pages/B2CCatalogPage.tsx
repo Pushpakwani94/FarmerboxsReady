@@ -50,7 +50,7 @@ const B2C_CATEGORY_TABS = [
 ];
 
 export const B2CCatalogPage: React.FC = () => {
-  const { products, selectedProduct, setSelectedProduct, deleteProduct, updateProduct, seedDatabaseToFirebase } = useApp();
+  const { products, selectedProduct, setSelectedProduct, deleteProduct, updateProduct, seedDatabaseToFirebase, confirmAction } = useApp();
 
   // Filter & Search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -223,10 +223,17 @@ export const B2CCatalogPage: React.FC = () => {
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
-    if (window.confirm(`Are you sure you want to delete ${selectedIds.length} selected B2C products?`)) {
-      selectedIds.forEach(id => deleteProduct(id));
-      setSelectedIds([]);
-    }
+    confirmAction({
+      title: 'Delete Selected Products',
+      message: `Are you sure you want to permanently delete these ${selectedIds.length} B2C products from the retail catalog?`,
+      entityName: `${selectedIds.length} Products`,
+      confirmLabel: 'Delete Products',
+      type: 'danger',
+      onConfirm: () => {
+        selectedIds.forEach(id => deleteProduct(id));
+        setSelectedIds([]);
+      }
+    });
   };
 
   const handleExportCSV = () => {

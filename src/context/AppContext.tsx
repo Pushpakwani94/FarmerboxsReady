@@ -97,6 +97,28 @@ interface AppContextType {
   setIsMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
 
+  // Universal CRUD Confirmation & Action Modal
+  confirmModal: {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    entityName?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+  };
+  confirmAction: (config: {
+    title: string;
+    message: string;
+    entityName?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+  }) => void;
+  closeConfirmModal: () => void;
+
   // Admin Profile
   adminProfile: AdminProfile;
   updateAdminProfile: (data: Partial<AdminProfile>) => void;
@@ -343,6 +365,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
+
+  // Universal CRUD Confirmation & Action Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    entityName?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const confirmAction = (config: {
+    title: string;
+    message: string;
+    entityName?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title: config.title,
+      message: config.message,
+      entityName: config.entityName,
+      confirmLabel: config.confirmLabel || 'Confirm',
+      cancelLabel: config.cancelLabel || 'Cancel',
+      type: config.type || 'danger',
+      onConfirm: config.onConfirm
+    });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   const loginAdmin = async (email: string, password?: string, rememberMe: boolean = true): Promise<boolean> => {
     const user = await authService.loginWithPhoneOrEmail(email, password, 'admin');
@@ -1120,6 +1184,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isMobileMenuOpen,
         setIsMobileMenuOpen,
         toggleMobileMenu,
+        confirmModal,
+        confirmAction,
+        closeConfirmModal,
         adminProfile,
         updateAdminProfile,
         markNotificationsAsRead,

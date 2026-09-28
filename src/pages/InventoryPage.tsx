@@ -53,7 +53,7 @@ const CATEGORIES = [
 ];
 
 export const InventoryPage: React.FC = () => {
-  const { products, selectedProduct, setSelectedProduct, deleteProduct, setIsAddProductOpen, seedDatabaseToFirebase } = useApp();
+  const { products, selectedProduct, setSelectedProduct, deleteProduct, setIsAddProductOpen, seedDatabaseToFirebase, confirmAction } = useApp();
 
   // Catalog tab & filter states
   const [activeCatalogTab, setActiveCatalogTab] = useState<'ALL' | 'B2B' | 'B2C'>('ALL');
@@ -189,12 +189,19 @@ export const InventoryPage: React.FC = () => {
   };
 
   const handleDelete = (p: Product) => {
-    if (window.confirm(`Are you sure you want to delete ${p.name} from catalog?`)) {
-      deleteProduct(p.id);
-      if (drawerProduct?.id === p.id) {
-        setIsDetailsOpen(false);
+    confirmAction({
+      title: 'Delete Product',
+      message: 'Are you sure you want to remove this product from the inventory catalog?',
+      entityName: p.name,
+      confirmLabel: 'Delete Product',
+      type: 'danger',
+      onConfirm: () => {
+        deleteProduct(p.id);
+        if (drawerProduct?.id === p.id) {
+          setIsDetailsOpen(false);
+        }
       }
-    }
+    });
   };
 
   const handleSyncCatalog = async () => {

@@ -164,6 +164,7 @@ export const ZonesPage: React.FC = () => {
     setIsAddZoneOpen,
     updateZone,
     deleteZone,
+    confirmAction,
     setActiveTab,
     setSelectedJoiner,
     joiners,
@@ -238,7 +239,6 @@ export const ZonesPage: React.FC = () => {
         geoZone.name.toLowerCase().includes(zName)
       );
     });
-
     if (found) {
       setSelectedZone(found);
     } else {
@@ -246,7 +246,7 @@ export const ZonesPage: React.FC = () => {
         id: Date.now(),
         name: geoZone.name,
         areaLocations: geoZone.category,
-        hotelsCount: 45,
+        hotelsCount: 15,
         joinersCount: 3,
         ordersThisMonth: 120,
         salesThisMonth: 125000,
@@ -269,9 +269,14 @@ export const ZonesPage: React.FC = () => {
 
   const handleDelete = (e: React.MouseEvent, zoneId: number | string, zoneName: string) => {
     e.stopPropagation();
-    if (confirm(`Are you sure you want to delete ${zoneName}?`)) {
-      deleteZone(Number(zoneId));
-    }
+    confirmAction({
+      title: 'Delete Zone',
+      message: 'Are you sure you want to delete this zone? Assigned hotels and joiners will be unlinked from this zone.',
+      entityName: zoneName,
+      confirmLabel: 'Delete Zone',
+      type: 'danger',
+      onConfirm: () => deleteZone(Number(zoneId))
+    });
   };
 
   const handleEditClick = (e: React.MouseEvent, zone: Zone) => {

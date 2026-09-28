@@ -43,6 +43,7 @@ export const JoinersPage: React.FC = () => {
     setSelectedHotel,
     hotels,
     orders,
+    confirmAction,
     isDatabaseConnected
   } = useApp();
 
@@ -190,9 +191,19 @@ export const JoinersPage: React.FC = () => {
 
   const handleDelete = (e: React.MouseEvent, joinerId: number | string, joinerName?: string) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete ${joinerName || 'this joiner'}?`)) {
-      deleteJoiner(joinerId);
-    }
+    confirmAction({
+      title: 'Delete Hotel Joiner',
+      message: 'Are you sure you want to remove this joiner? Onboarded hotels and commission balance will be detached.',
+      entityName: joinerName || `Joiner #${joinerId}`,
+      confirmLabel: 'Delete Joiner',
+      type: 'danger',
+      onConfirm: () => {
+        deleteJoiner(joinerId);
+        if (selectedJoiner && String(selectedJoiner.id) === String(joinerId)) {
+          setSelectedJoiner(null);
+        }
+      }
+    });
   };
 
   const handleOpenEdit = (joiner: Joiner) => {

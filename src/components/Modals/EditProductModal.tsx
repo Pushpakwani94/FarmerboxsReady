@@ -40,7 +40,7 @@ const CATEGORIES = [
 ];
 
 export const EditProductModal: React.FC<EditProductModalProps> = ({ product, isOpen, onClose }) => {
-  const { updateProduct, deleteProduct } = useApp();
+  const { updateProduct, deleteProduct, confirmAction } = useApp();
 
   const [name, setName] = useState('');
   const [catalogType, setCatalogType] = useState<CatalogType>('B2B');
@@ -545,10 +545,17 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, isO
               <button
                 type="button"
                 onClick={() => {
-                  if (window.confirm(`Are you sure you want to delete ${product.name} from catalog?`)) {
-                    deleteProduct(product.id);
-                    onClose();
-                  }
+                  confirmAction({
+                    title: 'Delete Product',
+                    message: 'Are you sure you want to permanently remove this produce item from the master catalog?',
+                    entityName: product.name,
+                    confirmLabel: 'Delete Produce',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteProduct(product.id);
+                      onClose();
+                    }
+                  });
                 }}
                 className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
               >

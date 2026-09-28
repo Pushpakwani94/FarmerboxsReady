@@ -44,7 +44,7 @@ const ZONE_MAP_COORDS: Record<string, { cx: number; cy: number; color: string; p
 };
 
 export const DriversPage: React.FC = () => {
-  const { drivers, zones, orders, deleteDriver, updateDriver } = useApp();
+  const { drivers, zones, orders, deleteDriver, updateDriver, confirmAction } = useApp();
 
   // Filter & Search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -151,12 +151,19 @@ export const DriversPage: React.FC = () => {
   };
 
   const handleDeleteDriver = (driver: Driver) => {
-    if (window.confirm(`Are you sure you want to remove driver ${driver.name} (${driver.vehicleNo})?`)) {
-      deleteDriver(driver.id);
-      if (selectedDriverState && selectedDriverState.id === driver.id) {
-        setSelectedDriverState(null);
+    confirmAction({
+      title: 'Remove Delivery Driver',
+      message: 'Are you sure you want to remove this driver from the active delivery fleet?',
+      entityName: `${driver.name} (${driver.vehicleNo})`,
+      confirmLabel: 'Remove Driver',
+      type: 'danger',
+      onConfirm: () => {
+        deleteDriver(driver.id);
+        if (selectedDriverState && selectedDriverState.id === driver.id) {
+          setSelectedDriverState(null);
+        }
       }
-    }
+    });
   };
 
   const handleToggleStatus = (driver: Driver) => {

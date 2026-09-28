@@ -35,6 +35,7 @@ export const HotelsPage: React.FC = () => {
     isDatabaseConnected,
     deleteHotel,
     updateHotel,
+    confirmAction,
     setActiveTab
   } = useApp();
 
@@ -387,9 +388,14 @@ export const HotelsPage: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Delete hotel ${h.name}?`)) {
-                                deleteHotel(h.id);
-                              }
+                              confirmAction({
+                                title: 'Delete Hotel',
+                                message: 'Are you sure you want to delete this hotel? Their profile, active orders, and joiner linkages will be removed.',
+                                entityName: h.name,
+                                confirmLabel: 'Delete Hotel',
+                                type: 'danger',
+                                onConfirm: () => deleteHotel(h.id)
+                              });
                             }}
                             className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
                             title="Delete Hotel"
@@ -500,10 +506,17 @@ export const HotelsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Are you sure you want to delete ${activeHotel.name}?`)) {
-                    deleteHotel(activeHotel.id);
-                    setSelectedHotel(null);
-                  }
+                  confirmAction({
+                    title: 'Delete Hotel',
+                    message: 'Are you sure you want to permanently delete this hotel? All associated order records and delivery routing will be updated.',
+                    entityName: activeHotel.name,
+                    confirmLabel: 'Delete Hotel',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteHotel(activeHotel.id);
+                      setSelectedHotel(null);
+                    }
+                  });
                 }}
                 className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
                 title="Delete Hotel"

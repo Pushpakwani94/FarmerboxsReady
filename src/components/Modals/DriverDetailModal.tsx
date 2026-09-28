@@ -18,7 +18,7 @@ export const DriverDetailModal: React.FC<DriverDetailModalProps> = ({
   onEdit,
   onToggleStatus
 }) => {
-  const { deleteDriver } = useApp();
+  const { deleteDriver, confirmAction } = useApp();
   if (!isOpen || !driver) return null;
 
   return (
@@ -209,10 +209,17 @@ export const DriverDetailModal: React.FC<DriverDetailModalProps> = ({
             </button>
             <button
               onClick={() => {
-                if (window.confirm(`Are you sure you want to delete driver ${driver.name}?`)) {
-                  deleteDriver(driver.id);
-                  onClose();
-                }
+                confirmAction({
+                  title: 'Remove Delivery Driver',
+                  message: 'Are you sure you want to remove this driver from the active delivery fleet?',
+                  entityName: `${driver.name} (${driver.vehicleNo})`,
+                  confirmLabel: 'Remove Driver',
+                  type: 'danger',
+                  onConfirm: () => {
+                    deleteDriver(driver.id);
+                    onClose();
+                  }
+                });
               }}
               className="px-3 py-1.5 rounded-lg font-semibold text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 cursor-pointer flex items-center gap-1 transition-colors"
             >

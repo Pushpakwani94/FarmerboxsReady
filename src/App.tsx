@@ -29,13 +29,14 @@ import { OrderDetailModal } from './components/Modals/OrderDetailModal';
 import { NotificationsDrawer } from './components/Modals/NotificationsDrawer';
 import { AdminProfileModal } from './components/AdminProfileModal';
 import { LogoutConfirmModal } from './components/Modals/LogoutConfirmModal';
+import { ConfirmModal } from './components/Modals/ConfirmModal';
 
 import { Capacitor } from '@capacitor/core';
 import { StandaloneMobileApp } from './mobileApp/StandaloneMobileApp';
 import { SplashScreen } from './components/SplashScreen';
 
 const MainContent: React.FC = () => {
-  const { activeTab, setActiveTab, toggleMobileMenu } = useApp();
+  const { activeTab, setActiveTab, toggleMobileMenu, confirmModal, closeConfirmModal } = useApp();
 
   const renderTab = () => {
     switch (activeTab) {
@@ -174,6 +175,20 @@ const MainContent: React.FC = () => {
       <NotificationsDrawer />
       <AdminProfileModal />
       <LogoutConfirmModal />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        entityName={confirmModal.entityName}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel={confirmModal.cancelLabel}
+        type={confirmModal.type}
+        onConfirm={() => {
+          confirmModal.onConfirm();
+          closeConfirmModal();
+        }}
+        onCancel={closeConfirmModal}
+      />
     </div>
   );
 };

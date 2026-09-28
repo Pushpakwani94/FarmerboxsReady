@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import type { OrderStatus } from '../../types';
 
 export const OrderDetailModal: React.FC = () => {
-  const { selectedOrder, setSelectedOrder, updateOrderStatus, isOrderDetailModalOpen, setIsOrderDetailModalOpen, deleteOrder } = useApp();
+  const { selectedOrder, setSelectedOrder, updateOrderStatus, isOrderDetailModalOpen, setIsOrderDetailModalOpen, deleteOrder, confirmAction } = useApp();
 
   if (!isOrderDetailModalOpen || !selectedOrder) return null;
 
@@ -14,11 +14,18 @@ export const OrderDetailModal: React.FC = () => {
   const isDelivered = selectedOrder.status === 'Delivered';
 
   const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to delete Order #${selectedOrder.id}?`)) {
-      deleteOrder(selectedOrder.id);
-      setIsOrderDetailModalOpen(false);
-      setSelectedOrder(null);
-    }
+    confirmAction({
+      title: 'Delete Order',
+      message: `Are you sure you want to delete Order #${selectedOrder.id}?`,
+      entityName: `Order #${selectedOrder.id} (${selectedOrder.hotelName})`,
+      confirmLabel: 'Delete Order',
+      type: 'danger',
+      onConfirm: () => {
+        deleteOrder(selectedOrder.id);
+        setIsOrderDetailModalOpen(false);
+        setSelectedOrder(null);
+      }
+    });
   };
 
   const handleApproveDelivery = () => {

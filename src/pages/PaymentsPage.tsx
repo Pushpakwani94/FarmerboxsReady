@@ -4,7 +4,7 @@ import { CreditCard, Wallet, ArrowDownRight, ArrowUpRight, Plus, Search, Eye, Tr
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 export const PaymentsPage: React.FC = () => {
-  const { payments, orders, isDatabaseConnected, deletePayment, setActiveTab: setAppActiveTab } = useApp();
+  const { payments, orders, isDatabaseConnected, deletePayment, setActiveTab: setAppActiveTab, confirmAction } = useApp();
   const [activeTab, setActiveTab] = useState<'All Transactions' | 'Order Payments' | 'Joiner Payouts' | 'Driver Payouts' | 'Refunds'>('All Transactions');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -222,9 +222,14 @@ export const PaymentsPage: React.FC = () => {
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete payment reference #${p.referenceId || p.id}?`)) {
-                                deletePayment(p.id);
-                              }
+                              confirmAction({
+                                title: 'Delete Payment Record',
+                                message: `Are you sure you want to delete payment reference #${p.referenceId || p.id}?`,
+                                entityName: `Ref #${p.referenceId || p.id} (₹${p.amount})`,
+                                confirmLabel: 'Delete Record',
+                                type: 'danger',
+                                onConfirm: () => deletePayment(p.id)
+                              });
                             }}
                             className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 cursor-pointer transition-colors"
                             title="Delete Payment"

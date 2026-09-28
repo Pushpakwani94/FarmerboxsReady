@@ -37,7 +37,8 @@ export const OrdersPage: React.FC = () => {
     setSelectedHotel,
     isDatabaseConnected,
     addOrder,
-    deleteOrder
+    deleteOrder,
+    confirmAction
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -347,10 +348,17 @@ export const OrdersPage: React.FC = () => {
             </span>
             <button
               onClick={() => {
-                if (window.confirm(`Delete ${selectedOrderIds.length} selected orders?`)) {
-                  selectedOrderIds.forEach(id => deleteOrder(id));
-                  setSelectedOrderIds([]);
-                }
+                confirmAction({
+                  title: 'Delete Selected Orders',
+                  message: `Are you sure you want to permanently delete these ${selectedOrderIds.length} orders?`,
+                  entityName: `${selectedOrderIds.length} Orders`,
+                  confirmLabel: 'Delete Orders',
+                  type: 'danger',
+                  onConfirm: () => {
+                    selectedOrderIds.forEach(id => deleteOrder(id));
+                    setSelectedOrderIds([]);
+                  }
+                });
               }}
               className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer"
             >
@@ -480,9 +488,14 @@ export const OrdersPage: React.FC = () => {
                           </button>
                           <button
                             onClick={() => {
-                              if (window.confirm(`Delete Order #${ord.id}?`)) {
-                                deleteOrder(ord.id);
-                              }
+                              confirmAction({
+                                title: 'Delete Order',
+                                message: `Are you sure you want to delete order #${ord.id}?`,
+                                entityName: `Order #${ord.id} (${ord.hotelName})`,
+                                confirmLabel: 'Delete Order',
+                                type: 'danger',
+                                onConfirm: () => deleteOrder(ord.id)
+                              });
                             }}
                             className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
                             title="Delete Order"
@@ -596,9 +609,16 @@ export const OrdersPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Delete Order #${activeOrder.id}?`)) {
-                    deleteOrder(activeOrder.id);
-                  }
+                  confirmAction({
+                    title: 'Delete Order',
+                    message: `Are you sure you want to permanently delete order #${activeOrder.id}?`,
+                    entityName: `Order #${activeOrder.id} (${activeOrder.hotelName})`,
+                    confirmLabel: 'Delete Order',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteOrder(activeOrder.id);
+                    }
+                  });
                 }}
                 className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
                 title="Delete Order"
