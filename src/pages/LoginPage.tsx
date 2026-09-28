@@ -16,11 +16,22 @@ import { useApp } from '../context/AppContext';
 export const LoginPage: React.FC = () => {
   const { loginAdmin, isDatabaseConnected } = useApp();
 
-  // Login Form State
-  const [email, setEmail] = useState('');
+  // Login Form State with saved email & remember-me restoration
+  const [email, setEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('farmerbox_saved_email') || '';
+    }
+    return '';
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('farmerbox_remember_me');
+      return stored === 'true';
+    }
+    return false;
+  });
 
   // Status State
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +52,7 @@ export const LoginPage: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await loginAdmin(email.trim(), password);
+      await loginAdmin(email.trim(), password, rememberMe);
     } catch (err: any) {
       setErrorMsg(err.message || 'Access Denied: Invalid credentials or unauthorized admin account.');
     } finally {
@@ -55,7 +66,7 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      await loginAdmin('admin@farmerbox.com', 'Admin@123');
+      await loginAdmin('admin@farmerbox.com', 'Admin@123', rememberMe);
     } catch (err: any) {
       setErrorMsg(err.message || 'Login error');
     } finally {

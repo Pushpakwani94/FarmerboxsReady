@@ -71,7 +71,7 @@ interface AppContextType {
 
   // Authentication & Session
   isAdminLoggedIn: boolean;
-  loginAdmin: (email: string, password?: string) => Promise<boolean>;
+  loginAdmin: (email: string, password?: string, rememberMe?: boolean) => Promise<boolean>;
   logoutAdmin: () => void;
 
   // Modals
@@ -315,9 +315,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
 
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = localStorage.getItem('farmerbox_admin_logged_in');
-    return stored === null ? true : stored === 'true';
+    if (typeof window === 'undefined') return false;
+    const isRemembered = localStorage.getItem('farmerbox_remember_me') === 'true';
+    const localLoggedIn = localStorage.getItem('farmerbox_admin_logged_in') === 'true';
+    const sessionLoggedIn = sessionStorage.getItem('farmerbox_admin_logged_in') === 'true';
+
+    // Persist login only if Remember Me is explicitly enabled AND local login flag is active
+    if (isRemembered && localLoggedIn) {
+      return true;
+    }
+    // Or if currently active in this browser session
+    if (sessionLoggedIn) {
+      return true;
+    }
+    // Default: Show login page for first time / unauthenticated users
+    return false;
   });
 
   const [isAddHotelOpen, setIsAddHotelOpen] = useState(false);
@@ -332,15 +344,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const toggleMobileMenu = () => setIsMobileMenuOpen(prev => !prev);
 
-  const loginAdmin = async (email: string, password?: string): Promise<boolean> => {
+  const loginAdmin = async (email: string, password?: string, rememberMe: boolean = true): Promise<boolean> => {
     const user = await authService.loginWithPhoneOrEmail(email, password, 'admin');
     if (!user || user.role !== 'admin') {
       throw new Error('Access denied. Only authorized administrators can log in to FarmerBox Admin Panel.');
     }
     setIsAdminLoggedIn(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('farmerbox_admin_logged_in', 'true');
-      localStorage.setItem('farmerbox_admin_email', user.email);
+      sessionStorage.setItem('farmerbox_admin_logged_in', 'true');
+      sessionStorage.setItem('farmerbox_admin_email', user.email);
+
+      if (rememberMe) {
+        localStorage.setItem('farmerbox_admin_logged_in', 'true');
+        localStorage.setItem('farmerbox_remember_me', 'true');
+        localStorage.setItem('farmerbox_saved_email', user.email);
+        localStorage.setItem('farmerbox_admin_email', user.email);
+      } else {
+        localStorage.setItem('farmerbox_admin_logged_in', 'false');
+        localStorage.removeItem('farmerbox_remember_me');
+        localStorage.removeItem('farmerbox_saved_email');
+        localStorage.removeItem('farmerbox_admin_email');
+      }
     }
     return true;
   };
@@ -353,6 +377,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (typeof window !== 'undefined') {
       localStorage.setItem('farmerbox_admin_logged_in', 'false');
       localStorage.removeItem('farmerbox_admin_email');
+      localStorage.removeItem('farmerbox_remember_me');
+      sessionStorage.removeItem('farmerbox_admin_logged_in');
+      sessionStorage.removeItem('farmerbox_admin_email');
     }
     authService.logout().catch(() => {});
   };
