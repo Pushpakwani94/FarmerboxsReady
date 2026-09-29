@@ -128,6 +128,8 @@ interface AppContextType {
 
   // Actions
   updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
+  acceptOrder: (orderId: string, driverName?: string) => void;
+  assignDriverToOrder: (orderId: string, driverName: string, driverPhone?: string, driverId?: string | number, newStatus?: OrderStatus) => void;
   addZone: (name: string, area?: string, status?: 'Active' | 'Inactive') => void;
   updateZone: (zoneId: number, data: Partial<Zone>) => void;
   deleteZone: (zoneId: number) => void;
@@ -567,47 +569,84 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const existing = orders.find(o => String(o.id) === String(orderId));
     if (existing) {
       const orderAmount = Number(existing.amount || existing.totalAmount || 0);
-      const isEligibleBonus = orderAmount >= 1500;
-      const commissionAmount = newStatus === 'Delivered' ? (isEligibleBonus ? 100 : Number(existing.commission || 0)) : Number(existing.commission || 0);
+      const isAlreadyCredited = Boolean(existing.walletCredited);
+      const shouldCreditWallet = newStatus === 'Delivered' && !isAlreadyCredited;
 
       const updated = {
         ...existing,
         status: newStatus,
         orderStatus: newStatus,
-        isBonusEligible: isEligibleBonus,
-        bonusAmount: isEligibleBonus ? 100 : 0,
-        bonusStatus: newStatus === 'Delivered' ? (isEligibleBonus ? 'Approved & Credited to Wallet' : 'Not Eligible') : (isEligibleBonus ? 'Pending Delivery Approval' : 'Not Eligible'),
-        commission: commissionAmount
+        isBonusEligible: true,
+        bonusAmount: 100,
+        bonusStatus: newStatus === 'Delivered' ? 'Approved & Credited to Wallet' : 'Pending Delivery Approval',
+        commission: 100,
+        walletCredited: isAlreadyCredited || shouldCreditWallet,
+        updatedAt: new Date().toISOString()
       };
       await saveRecord('orders', updated);
 
-      // If delivery is approved and marked 'Delivered' for an order >= 1500, credit ₹100 to the Joiner's wallet
-      if (newStatus === 'Delivered' && isEligibleBonus && existing.joiner) {
-        const joinerName = existing.joiner;
+      // If delivery is marked 'Delivered' by Admin or Driver, credit ₹100 to the Joiner / Hotel Partner's wallet
+      if (shouldCreditWallet) {
+        const joinerName = existing.joiner || 'Partner';
         const targetJoiner = joiners.find(j => 
-          j.name.toLowerCase() === joinerName.toLowerCase() || 
-          String(j.id) === String(existing.joinerId || '')
+          (j.name && joinerName && j.name.toLowerCase() === joinerName.toLowerCase()) || 
+          (existing.joinerId && String(j.id) === String(existing.joinerId)) ||
+          (existing.joinerPhone && j.mobile && j.mobile.replace(/\D/g, '') === existing.joinerPhone.replace(/\D/g, ''))
         );
 
         if (targetJoiner) {
-          const newTotalEarnings = (targetJoiner.totalEarnings || 0) + 100;
-          const newCommissionEarned = (targetJoiner.commissionEarned || 0) + 100;
+          const newTotalEarnings = (Number(targetJoiner.totalEarnings) || 0) + 100;
+          const newCommissionEarned = (Number(targetJoiner.commissionEarned) || 0) + 100;
+          const newWalletBalance = (Number((targetJoiner as any).walletBalance) || 0) + 100;
+
           const updatedJoiner = {
             ...targetJoiner,
             totalEarnings: newTotalEarnings,
             commissionEarned: newCommissionEarned,
-            walletBalance: ((targetJoiner as any).walletBalance || 0) + 100
+            walletBalance: newWalletBalance,
+            updatedAt: new Date().toISOString()
           };
 
           setJoiners(prev => prev.map(j => String(j.id) === String(targetJoiner.id) ? updatedJoiner : j));
           await saveRecord('joiners', updatedJoiner, String(targetJoiner.id));
+
+          // Also update Firestore 'users' doc if exists
+          if (db && targetJoiner.id) {
+            try {
+              const cleanPhone = (targetJoiner.mobile || '').replace(/\D/g, '');
+              const docId = String(targetJoiner.id).startsWith('usr_') ? String(targetJoiner.id) : `usr_${cleanPhone || targetJoiner.id}`;
+              const userDocRef = doc(db, 'users', docId);
+              setDoc(userDocRef, {
+                walletBalance: newWalletBalance,
+                totalEarnings: newTotalEarnings,
+                commissionEarned: newCommissionEarned,
+                updatedAt: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            } catch (e) {
+              // ignore
+            }
+          }
         }
 
-        // Notify Joiner of the ₹100 Wallet Bonus credit
+        // Also add a Payment / Wallet Transaction Record
+        const newPaymentTxn: PaymentTransaction = {
+          id: Date.now(),
+          dateTime: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
+          referenceId: `PAY${Math.floor(100000 + Math.random() * 900000)}`,
+          type: 'Joiner Commission',
+          fromTo: existing.joiner || existing.hotelName,
+          orderId: String(orderId),
+          amount: 100,
+          status: 'Success',
+          paymentMode: 'Wallet'
+        };
+        addPayment(newPaymentTxn);
+
+        // Notify Joiner & Admin of the ₹100 Wallet Credit
         addNotification({
-          title: `₹100 Wallet Bonus Credited! 🎉`,
-          message: `Order #${orderId} (₹${orderAmount.toLocaleString('en-IN')}) delivered to ${existing.hotelName} has been approved by Admin. ₹100 added to your Joiner Wallet!`,
-          subtitle: `${existing.hotelName} • ₹100 Wallet Bonus Added`,
+          title: `₹100 Wallet Reward Credited! 🎉`,
+          message: `Order #${orderId} delivered to ${existing.hotelName}. ₹100 has been credited to ${existing.joiner || 'Partner'}'s wallet account!`,
+          subtitle: `${existing.hotelName} • ₹100 Wallet Balance Added`,
           userType: 'Joiners',
           status: 'Sent',
           category: 'Commission',
@@ -631,21 +670,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setOrders(prev =>
       prev.map(ord => {
         if (String(ord.id) === String(orderId)) {
-          const amt = Number(ord.amount || ord.totalAmount || 0);
-          const isEligibleBonus = amt >= 1500;
+          const isAlreadyCredited = Boolean(ord.walletCredited);
+          const shouldCredit = newStatus === 'Delivered' && !isAlreadyCredited;
           return {
             ...ord,
             status: newStatus,
             orderStatus: newStatus,
-            isBonusEligible: isEligibleBonus,
-            bonusAmount: isEligibleBonus ? 100 : 0,
-            bonusStatus: newStatus === 'Delivered' ? (isEligibleBonus ? 'Approved & Credited to Wallet' : 'Not Eligible') : (isEligibleBonus ? 'Pending Delivery Approval' : 'Not Eligible'),
-            commission: newStatus === 'Delivered' ? (isEligibleBonus ? 100 : Number(ord.commission || 0)) : Number(ord.commission || 0)
+            isBonusEligible: true,
+            bonusAmount: 100,
+            bonusStatus: newStatus === 'Delivered' ? 'Approved & Credited to Wallet' : 'Pending Delivery Approval',
+            commission: 100,
+            walletCredited: isAlreadyCredited || shouldCredit
           };
         }
         return ord;
       })
     );
+  };
+
+  const assignDriverToOrder = async (
+    orderId: string,
+    driverName: string,
+    driverPhone?: string,
+    driverId?: string | number,
+    newStatus: OrderStatus = 'Out for Delivery'
+  ) => {
+    const existing = orders.find(o => String(o.id) === String(orderId));
+    const matchedDriver = drivers.find(d => 
+      (driverName && d.name && d.name.toLowerCase() === driverName.toLowerCase()) ||
+      (driverId && String(d.id) === String(driverId))
+    );
+
+    const finalDriverName = driverName || matchedDriver?.name || 'Assigned Driver';
+    const finalDriverPhone = driverPhone || matchedDriver?.mobile || '9876123456';
+    const finalDriverId = driverId || matchedDriver?.id || 'DR01';
+
+    if (existing) {
+      const updated: Order = {
+        ...existing,
+        driver: finalDriverName,
+        driverPhone: finalDriverPhone,
+        driverId: finalDriverId,
+        status: newStatus,
+        orderStatus: newStatus,
+        updatedAt: new Date().toISOString()
+      };
+
+      await saveRecord('orders', updated);
+
+      addNotification({
+        title: `Driver Assigned to Order #${orderId} 🚚`,
+        message: `Order #${orderId} (${existing.hotelName}) has been assigned to driver ${finalDriverName}. Status: ${newStatus}.`,
+        subtitle: `${finalDriverName} • ${newStatus}`,
+        userType: 'Drivers',
+        status: 'Sent',
+        category: 'Orders',
+        iconType: 'driver',
+        read: false
+      });
+    }
+
+    setOrders(prev =>
+      prev.map(ord => {
+        if (String(ord.id) === String(orderId)) {
+          return {
+            ...ord,
+            driver: finalDriverName,
+            driverPhone: finalDriverPhone,
+            driverId: finalDriverId,
+            status: newStatus,
+            orderStatus: newStatus
+          };
+        }
+        return ord;
+      })
+    );
+  };
+
+  const acceptOrder = async (orderId: string, driverName?: string) => {
+    if (driverName) {
+      await assignDriverToOrder(orderId, driverName, undefined, undefined, 'Out for Delivery');
+    } else {
+      await updateOrderStatus(orderId, 'Confirmed');
+    }
   };
 
   const addZone = async (name: string, area?: string, status?: 'Active' | 'Inactive') => {
@@ -1214,6 +1321,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         markNotificationAsRead,
         clearAllNotifications,
         updateOrderStatus,
+        acceptOrder,
+        assignDriverToOrder,
         addZone,
         updateZone,
         deleteZone,

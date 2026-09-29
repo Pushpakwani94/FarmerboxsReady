@@ -624,11 +624,16 @@ export const CustomerAppProvider: React.FC<{ children: ReactNode; initialScreen?
     try {
       const adminOrderPayload = {
         id: newOrder.id,
+        orderId: newOrder.id,
         hotelName: `${user.name} (B2C Customer)`,
         hotelId: 'cust_b2c',
+        joiner: 'FarmerBox Direct B2C',
         joinerName: 'FarmerBox Direct B2C',
         zone: newOrder.deliveryAddress?.area || 'Baner',
         amount: newOrder.totalAmount,
+        totalAmount: newOrder.totalAmount,
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         orderDate: 'Today',
         deliveryDate: 'Today',
         itemsCount: cartItemCount,
@@ -636,16 +641,21 @@ export const CustomerAppProvider: React.FC<{ children: ReactNode; initialScreen?
         orderStatus: 'Pending',
         paymentStatus: selectedPaymentMethod === 'COD' ? 'Pending' : 'Paid',
         paymentMode: selectedPaymentMethod,
-        commission: 0,
+        driver: 'Assigned upon dispatch',
+        commission: 100,
+        walletCredited: false,
         items: cart.map(item => ({
           id: item.productId,
+          productName: item.name,
           name: item.name,
-          qty: `${item.quantity} ${item.unit}`,
+          qty: item.quantity,
+          quantity: item.quantity,
+          unit: item.unit,
           price: item.price,
           total: item.price * item.quantity
         }))
       };
-      await saveRecord('orders', adminOrderPayload);
+      await saveRecord('orders', adminOrderPayload, newOrder.id);
     } catch (e) {
       console.warn('Firestore order sync:', e);
     }

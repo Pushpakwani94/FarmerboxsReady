@@ -4,13 +4,12 @@ import { useApp } from '../../context/AppContext';
 import type { OrderStatus } from '../../types';
 
 export const OrderDetailModal: React.FC = () => {
-  const { selectedOrder, setSelectedOrder, updateOrderStatus, isOrderDetailModalOpen, setIsOrderDetailModalOpen, deleteOrder, confirmAction } = useApp();
+  const { selectedOrder, setSelectedOrder, updateOrderStatus, assignDriverToOrder, drivers, isOrderDetailModalOpen, setIsOrderDetailModalOpen, deleteOrder, confirmAction } = useApp();
 
   if (!isOrderDetailModalOpen || !selectedOrder) return null;
 
   const statuses: OrderStatus[] = ['Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
   const orderAmount = Number(selectedOrder.amount || 0);
-  const isBonusEligible = orderAmount >= 1500;
   const isDelivered = selectedOrder.status === 'Delivered';
 
   const handleDelete = () => {
@@ -33,7 +32,20 @@ export const OrderDetailModal: React.FC = () => {
     setSelectedOrder({ 
       ...selectedOrder, 
       status: 'Delivered',
-      commission: isBonusEligible ? 100 : selectedOrder.commission
+      orderStatus: 'Delivered',
+      walletCredited: true,
+      commission: 100
+    });
+  };
+
+  const handleDriverChange = (driverName: string) => {
+    const matched = drivers.find(d => d.name === driverName);
+    assignDriverToOrder(selectedOrder.id, driverName, matched?.mobile, matched?.id, selectedOrder.status === 'Pending' ? 'Out for Delivery' : selectedOrder.status);
+    setSelectedOrder({
+      ...selectedOrder,
+      driver: driverName,
+      driverPhone: matched?.mobile || selectedOrder.driverPhone,
+      status: selectedOrder.status === 'Pending' ? 'Out for Delivery' : selectedOrder.status
     });
   };
 
@@ -48,10 +60,12 @@ export const OrderDetailModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg text-slate-800">Order {selectedOrder.id}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                <h3 className="font-bold text-lg text-slate-800">Order #{selectedOrder.id}</h3>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
                   isDelivered 
                     ? 'bg-emerald-100 text-emerald-800' 
+                    : selectedOrder.status === 'Out for Delivery'
+                    ? 'bg-sky-100 text-sky-800'
                     : 'bg-amber-100 text-amber-800'
                 }`}>
                   {selectedOrder.status}
@@ -78,9 +92,9 @@ export const OrderDetailModal: React.FC = () => {
               </span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px]">Hotel Joiner</span>
+              <span className="text-slate-400 block text-[10px]">Hotel Joiner / Partner</span>
               <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
-                <User className="w-3.5 h-3.5 text-sky-600" /> {selectedOrder.joiner}
+                <User className="w-3.5 h-3.5 text-sky-600" /> {selectedOrder.joiner || 'Hotel Partner'}
                 {selectedOrder.addedBy === 'Admin' && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold ml-1">
                     <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
@@ -91,7 +105,7 @@ export const OrderDetailModal: React.FC = () => {
             <div>
               <span className="text-slate-400 block text-[10px]">Delivery Driver</span>
               <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
-                <Truck className="w-3.5 h-3.5 text-orange-600" /> {selectedOrder.driver}
+                <Truck className="w-3.5 h-3.5 text-orange-600" /> {selectedOrder.driver || 'Not Assigned'}
               </span>
             </div>
             <div>
@@ -102,46 +116,58 @@ export const OrderDetailModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ₹100 Wallet Bonus Policy Card */}
-          {isBonusEligible ? (
-            <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
-              isDelivered 
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-950' 
-                : 'bg-amber-50 border-amber-200 text-amber-950'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${
-                  isDelivered ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
-                }`}>
-                  ₹100
-                </div>
-                <div>
-                  <h4 className="font-black text-xs">
-                    {isDelivered ? '₹100 Wallet Bonus Credited to Joiner' : 'Eligible for ₹100 Joiner Wallet Bonus'}
-                  </h4>
-                  <p className="text-[10.5px] opacity-80 mt-0.5">
-                    {isDelivered 
-                      ? `Delivery approved by Admin. ₹100 credited to ${selectedOrder.joiner}'s wallet.` 
-                      : `Order above ₹1,500. ₹100 will be credited when marked 'Delivered'.`}
-                  </p>
-                </div>
-              </div>
+          {/* Driver Assignment Dropdown */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <label className="block font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
+              <Truck className="w-3.5 h-3.5 text-purple-600" /> Assign / Change Delivery Driver:
+            </label>
+            <select
+              value={selectedOrder.driver || ''}
+              onChange={e => handleDriverChange(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-emerald-600 cursor-pointer text-xs"
+            >
+              <option value="" disabled>-- Select Driver --</option>
+              {drivers.map(d => (
+                <option key={d.id} value={d.name}>
+                  {d.name} • {d.zone} ({d.vehicleNo})
+                </option>
+              ))}
+            </select>
+          </div>
 
-              {!isDelivered && (
-                <button
-                  onClick={handleApproveDelivery}
-                  className="px-3 py-1.5 bg-[#15803d] hover:bg-[#166534] text-white font-extrabold text-[11px] rounded-lg shadow-xs cursor-pointer whitespace-nowrap"
-                >
-                  Approve Delivery
-                </button>
-              )}
+          {/* ₹100 Wallet Reward Policy Card */}
+          <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+            isDelivered 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-950' 
+              : 'bg-amber-50 border-amber-200 text-amber-950'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
+                isDelivered ? 'bg-emerald-600 text-white shadow-xs' : 'bg-amber-500 text-white shadow-xs'
+              }`}>
+                ₹100
+              </div>
+              <div>
+                <h4 className="font-black text-xs">
+                  {isDelivered ? '₹100 Wallet Reward Credited to Partner' : '₹100 Delivery Wallet Reward'}
+                </h4>
+                <p className="text-[10.5px] opacity-80 mt-0.5">
+                  {isDelivered 
+                    ? `Delivery marked Delivered. ₹100 credited to ${selectedOrder.joiner || 'Partner'}'s wallet account!` 
+                    : `Upon driver delivery completion, ₹100 is credited instantly to ${selectedOrder.joiner || 'Partner'}'s wallet account.`}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-slate-500">
-              <span>Order Value under ₹1,500 (Standard Order)</span>
-              <span className="font-semibold text-[11px]">No ₹100 Wallet Bonus</span>
-            </div>
-          )}
+
+            {!isDelivered && (
+              <button
+                onClick={handleApproveDelivery}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-[11px] rounded-lg shadow-xs cursor-pointer whitespace-nowrap"
+              >
+                Mark Delivered (+₹100)
+              </button>
+            )}
+          </div>
 
           <div className="space-y-1">
             <span className="text-slate-500 font-semibold">Delivery Address:</span>

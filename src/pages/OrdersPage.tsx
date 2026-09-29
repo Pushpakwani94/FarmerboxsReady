@@ -20,9 +20,11 @@ import {
   MapPin,
   Check,
   Shield,
-  Trash2
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import type { Order } from '../types';
+import { AssignOrderModal } from '../components/Modals/AssignOrderModal';
 
 export const OrdersPage: React.FC = () => {
   const {
@@ -38,7 +40,10 @@ export const OrdersPage: React.FC = () => {
     isDatabaseConnected,
     addOrder,
     deleteOrder,
-    confirmAction
+    confirmAction,
+    updateOrderStatus,
+    acceptOrder,
+    assignDriverToOrder
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,6 +58,8 @@ export const OrdersPage: React.FC = () => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [showTimeline, setShowTimeline] = useState(false);
   const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignModalOrderId, setAssignModalOrderId] = useState<string | undefined>(undefined);
 
   // New Order Form state
   const [newHotelName, setNewHotelName] = useState(hotels[0]?.name || 'Hotel Spice Villa');
@@ -465,7 +472,24 @@ export const OrdersPage: React.FC = () => {
                           {ord.paymentMode}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap">{ord.driver || '—'}</td>
+                      <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap font-medium">
+                        {ord.driver ? (
+                          <span className="flex items-center gap-1 text-slate-800 font-semibold">
+                            <Truck className="w-3 h-3 text-emerald-600" /> {ord.driver}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setAssignModalOrderId(ord.id);
+                              setIsAssignModalOpen(true);
+                            }}
+                            className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[10.5px] font-bold cursor-pointer"
+                          >
+                            + Assign Driver
+                          </button>
+                        )}
+                      </td>
                       <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
                           ord.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' :
@@ -478,7 +502,49 @@ export const OrdersPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-2.5 px-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {ord.status === 'Pending' && (
+                            <button
+                              onClick={() => {
+                                setAssignModalOrderId(ord.id);
+                                setIsAssignModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Accept Order & Assign Driver"
+                            >
+                              <Truck className="w-3 h-3" /> Accept & Assign
+                            </button>
+                          )}
+
+                          {(ord.status === 'Confirmed' || ord.status === 'Preparing') && (
+                            <button
+                              onClick={() => {
+                                setAssignModalOrderId(ord.id);
+                                setIsAssignModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Assign Driver for Dispatch"
+                            >
+                              <Truck className="w-3 h-3" /> Assign Driver
+                            </button>
+                          )}
+
+                          {ord.status === 'Out for Delivery' && (
+                            <button
+                              onClick={() => updateOrderStatus(ord.id, 'Delivered')}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Mark Delivered (+ ₹100 Wallet Reward to Partner)"
+                            >
+                              <CheckCircle2 className="w-3 h-3" /> Mark Delivered
+                            </button>
+                          )}
+
+                          {ord.status === 'Delivered' && (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-md flex items-center gap-1">
+                              <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> ₹100 Credited
+                            </span>
+                          )}
+
                           <button
                             onClick={() => setSelectedOrder(ord)}
                             className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
@@ -694,29 +760,64 @@ export const OrdersPage: React.FC = () => {
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <h5 className="font-bold text-slate-800">Delivery</h5>
+                    <h5 className="font-bold text-slate-800">Delivery & Driver</h5>
                     <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
                       <Truck className="w-3 h-3" /> {activeOrder.status}
                     </span>
                   </div>
-                  <p className="text-slate-600">Driver: <strong>{activeOrder.driver || 'Suresh Kumar'}</strong></p>
-                  <p className="text-slate-500 text-[11px]">Contact: {activeOrder.driverPhone || '9876123456'}</p>
+                  <p className="text-slate-600">Driver: <strong>{activeOrder.driver || 'Not Assigned'}</strong></p>
+                  <p className="text-slate-500 text-[11px]">Contact: {activeOrder.driverPhone || '—'}</p>
+                  <div className="pt-2 flex items-center gap-1.5">
+                    {activeOrder.status !== 'Delivered' && (
+                      <button
+                        onClick={() => {
+                          setAssignModalOrderId(activeOrder.id);
+                          setIsAssignModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Truck className="w-3 h-3" /> {activeOrder.driver ? 'Change Driver' : 'Assign Driver'}
+                      </button>
+                    )}
+                    {activeOrder.status !== 'Delivered' && activeOrder.status !== 'Cancelled' && (
+                      <button
+                        onClick={() => updateOrderStatus(activeOrder.id, 'Delivered')}
+                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> Mark Delivered (+₹100)
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Joiner Commission Box */}
-              <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-100 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">🤝</span>
+              {/* Joiner Wallet Bonus / Commission Box */}
+              <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                activeOrder.status === 'Delivered' 
+                  ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950' 
+                  : 'bg-amber-50/80 border-amber-200 text-amber-950'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
+                    activeOrder.status === 'Delivered' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-amber-500 text-white shadow-xs'
+                  }`}>
+                    ₹100
+                  </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-slate-900 text-base">₹100</span>
-                      <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-full">
-                        Credited
+                      <span className="font-extrabold text-sm">
+                        {activeOrder.status === 'Delivered' ? '₹100 Wallet Reward Credited' : '₹100 Delivery Wallet Reward'}
+                      </span>
+                      <span className={`px-2 py-0.5 font-bold text-[10px] rounded-full ${
+                        activeOrder.status === 'Delivered' ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
+                      }`}>
+                        {activeOrder.status === 'Delivered' ? 'Credited to Wallet' : 'Pending Delivery'}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Commission credited to {activeOrder.joiner}
+                    <p className="text-[11px] opacity-80 mt-0.5">
+                      {activeOrder.status === 'Delivered' 
+                        ? `₹100 bonus has been credited to ${activeOrder.joiner || 'Partner'}'s digital wallet account.` 
+                        : `Once driver delivers the produce, ₹100 will be instantly added to ${activeOrder.joiner || 'Partner'}'s wallet account.`}
                     </p>
                   </div>
                 </div>
@@ -932,6 +1033,16 @@ export const OrdersPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Assign Driver Modal */}
+      <AssignOrderModal
+        isOpen={isAssignModalOpen}
+        onClose={() => {
+          setIsAssignModalOpen(false);
+          setAssignModalOrderId(undefined);
+        }}
+        preSelectedOrderId={assignModalOrderId}
+      />
     </div>
   );
 };

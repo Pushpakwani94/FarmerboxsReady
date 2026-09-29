@@ -5,28 +5,36 @@ import { useApp } from '../../context/AppContext';
 interface AssignOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  preSelectedOrderId?: string;
 }
 
-export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onClose }) => {
-  const { orders, drivers, updateOrderStatus } = useApp();
+export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onClose, preSelectedOrderId }) => {
+  const { orders, drivers, assignDriverToOrder } = useApp();
 
   const dispatchableOrders = orders.filter(o => o.status === 'Pending' || o.status === 'Confirmed' || o.status === 'Preparing');
   const activeDrivers = drivers.filter(d => d.status === 'Active');
 
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(dispatchableOrders[0]?.id || orders[0]?.id || 'FB1004');
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(preSelectedOrderId || dispatchableOrders[0]?.id || orders[0]?.id || 'FB1004');
   const [selectedDriverName, setSelectedDriverName] = useState<string>(activeDrivers[0]?.name || 'Rohit Sharma');
   const [success, setSuccess] = useState(false);
 
+  // Sync if preSelectedOrderId changes
+  React.useEffect(() => {
+    if (preSelectedOrderId) {
+      setSelectedOrderId(preSelectedOrderId);
+    }
+  }, [preSelectedOrderId]);
+
   if (!isOpen) return null;
 
-  const currentOrder = orders.find(o => o.id === selectedOrderId);
+  const currentOrder = orders.find(o => String(o.id) === String(selectedOrderId));
   const currentDriver = drivers.find(d => d.name === selectedDriverName);
 
   const handleAssign = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderId || !selectedDriverName) return;
 
-    updateOrderStatus(selectedOrderId, 'Out for Delivery');
+    assignDriverToOrder(selectedOrderId, selectedDriverName, currentDriver?.mobile, currentDriver?.id, 'Out for Delivery');
     setSuccess(true);
     setTimeout(() => {
       setSuccess(false);
@@ -79,13 +87,16 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onCl
             </div>
 
             {currentOrder && (
-              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-100 space-y-1">
+              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-100 space-y-1.5">
                 <div className="flex items-center justify-between font-bold text-slate-800 text-xs">
                   <span>{currentOrder.hotelName}</span>
-                  <span className="text-emerald-700">₹{currentOrder.amount}</span>
+                  <span className="text-emerald-700 font-black">₹{currentOrder.amount}</span>
                 </div>
                 <p className="text-[11px] text-slate-600">Destination: {currentOrder.zone}, Pune</p>
-                <p className="text-[10px] text-slate-400">Current Status: {currentOrder.status}</p>
+                <div className="flex items-center justify-between pt-1 border-t border-purple-200/60 text-[10.5px]">
+                  <span className="text-slate-500">Partner: <strong>{currentOrder.joiner || 'Hotel Partner'}</strong></span>
+                  <span className="text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">₹100 Wallet Reward on Delivery</span>
+                </div>
               </div>
             )}
 

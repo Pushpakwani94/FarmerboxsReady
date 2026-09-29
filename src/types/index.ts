@@ -40,6 +40,8 @@ export interface Order {
   transactionId?: string;
   driver: string;
   driverPhone?: string;
+  driverId?: string | number;
+  walletCredited?: boolean;
   deliveryAddress?: string;
   deliveryPartnerId?: string | number;
   status: OrderStatus;

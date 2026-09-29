@@ -563,26 +563,19 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
   const commissionBalance = useMemo(() => {
     let liveDeliveredCommission = 0;
     let livePendingCommission = 0;
-    let totalEligibleOrders = 0;
+    let totalEligibleOrders = orders.length;
     let deliveredEligibleOrders = 0;
 
     orders.forEach(o => {
-      const amt = Number(o.amount || o.totalAmount || o.subtotal || 0);
-      const isBonusEligible = amt >= 1500;
-      const comm = Number((o as any).commission ?? (isBonusEligible ? 100 : 0));
+      const comm = Number((o as any).commission ?? 100);
+      const rewardAmt = comm > 0 ? comm : 100;
       const st = String(o.status || o.orderStatus || '').toLowerCase();
 
-      if (isBonusEligible) {
-        totalEligibleOrders += 1;
-      }
-
       if (st === 'delivered' || st === 'completed') {
-        if (isBonusEligible) {
-          deliveredEligibleOrders += 1;
-        }
-        liveDeliveredCommission += comm > 0 ? comm : (isBonusEligible ? 100 : 0);
+        deliveredEligibleOrders += 1;
+        liveDeliveredCommission += rewardAmt;
       } else if (st !== 'cancelled') {
-        livePendingCommission += comm > 0 ? comm : (isBonusEligible ? 100 : 0);
+        livePendingCommission += rewardAmt;
       }
     });
 
@@ -607,19 +600,18 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
   const commissionHistory = useMemo(() => {
     return orders.map(o => {
       const amt = Number(o.amount || o.totalAmount || o.subtotal || 0);
-      const isBonusEligible = amt >= 1500;
       const st = String(o.status || o.orderStatus || '').toLowerCase();
       const isDelivered = st === 'delivered' || st === 'completed';
-      const commAmount = Number((o as any).commission ?? (isBonusEligible ? 100 : 0));
+      const commAmount = Number((o as any).commission ?? 100);
 
       return {
         date: o.date || 'Today',
         orderId: o.id || o.orderId || '#FB0000',
         hotelName: o.hotelName || 'Hotel Partner',
-        amount: isBonusEligible ? (commAmount > 0 ? commAmount : 100) : commAmount,
+        amount: commAmount > 0 ? commAmount : 100,
         orderAmount: amt,
-        isBonusEligible,
-        status: (isDelivered && isBonusEligible ? 'Paid' : isBonusEligible ? 'Pending Approval' : 'Standard') as 'Paid' | 'Pending Approval' | 'Standard' | 'Pending'
+        isBonusEligible: true,
+        status: (isDelivered ? 'Paid' : 'Pending Approval') as 'Paid' | 'Pending Approval' | 'Standard' | 'Pending'
       };
     });
   }, [orders]);
@@ -990,10 +982,11 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       deliveryPartnerId: 'DR01',
       status: 'Pending',
       orderStatus: 'Pending',
-      isBonusEligible: finalAmount >= 1500,
-      bonusAmount: finalAmount >= 1500 ? 100 : 0,
-      bonusStatus: finalAmount >= 1500 ? 'Pending Delivery Approval' : 'Not Eligible',
-      commission: finalAmount >= 1500 ? 100 : 0,
+      isBonusEligible: true,
+      bonusAmount: 100,
+      bonusStatus: 'Pending Delivery Approval',
+      commission: 100,
+      walletCredited: false,
       items: mappedItems,
       rawItems: [...cart],
       ...orderData
