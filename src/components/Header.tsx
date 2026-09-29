@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Bell, Menu, Calendar, X, Building2, ShoppingBag, Users, LogOut, ChevronDown, User, Settings, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { FirebaseStatusBadge } from './FirebaseStatusBadge';
 
 export const Header: React.FC = () => {
   const {
@@ -195,9 +194,6 @@ export const Header: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* Firebase Cloud Database Status */}
-        <FirebaseStatusBadge />
 
         {/* Notification Bell */}
         <button

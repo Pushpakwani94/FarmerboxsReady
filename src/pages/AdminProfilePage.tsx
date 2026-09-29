@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Mail,
@@ -22,12 +22,14 @@ import {
   AlertCircle,
   Sparkles,
   Link as LinkIcon,
-  LogOut
+  LogOut,
+  Upload
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const AdminProfilePage: React.FC = () => {
   const { adminProfile, updateAdminProfile, logoutAdmin } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: adminProfile.name,
@@ -76,8 +78,32 @@ export const AdminProfilePage: React.FC = () => {
     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300',
     'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300',
     'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300',
-    'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300'
+    'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300',
+    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300',
+    'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=300',
+    'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=300'
   ];
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit. Please choose a smaller image.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      if (base64) {
+        setFormData(prev => ({ ...prev, avatar: base64 }));
+        updateAdminProfile({ avatar: base64 });
+        triggerToast('Profile photo updated successfully!');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -212,15 +238,33 @@ export const AdminProfilePage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column (4 cols) */}
         <div className="lg:col-span-4 space-y-5">
+          {/* Hidden File Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+
           {/* Identity Card */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs text-center space-y-4">
-            <div className="relative inline-block mx-auto">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="relative inline-block mx-auto group cursor-pointer"
+              title="Click to Upload New Photo"
+            >
               <img
                 src={adminProfile.avatar || formData.avatar}
                 alt={adminProfile.name}
-                className="w-28 h-28 rounded-full object-cover border-4 border-emerald-100 shadow-md mx-auto"
+                className="w-28 h-28 rounded-full object-cover border-4 border-emerald-100 shadow-md mx-auto group-hover:opacity-90 transition-opacity"
               />
-              <span className="absolute bottom-1 right-2 w-5 h-5 bg-emerald-500 border-2 border-white rounded-full"></span>
+              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                <Camera className="w-6 h-6" />
+              </div>
+              <div className="absolute bottom-0 right-1 w-8 h-8 bg-emerald-600 rounded-full border-2 border-white flex items-center justify-center shadow-sm text-white hover:scale-105 transition-transform">
+                <Camera className="w-4 h-4" />
+              </div>
             </div>
 
             <div>
@@ -265,50 +309,59 @@ export const AdminProfilePage: React.FC = () => {
             </div>
 
             {/* Quick Avatar Selector */}
-            <div className="pt-3 border-t border-slate-100 text-left">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-slate-700 font-bold text-xs">Profile Avatar</label>
-                <button
-                  type="button"
-                  onClick={() => setShowCustomAvatarInput(!showCustomAvatarInput)}
-                  className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <LinkIcon className="w-3 h-3" /> Custom URL
-                </button>
+            <div className="pt-3 border-t border-slate-100 text-left space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-slate-800 font-bold text-xs">Profile Photo</label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-[11px] bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                  >
+                    <Upload className="w-3 h-3" /> Upload Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomAvatarInput(!showCustomAvatarInput)}
+                    className="text-[11px] text-slate-600 bg-slate-100 hover:bg-slate-200 font-bold px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    <LinkIcon className="w-3 h-3" /> URL
+                  </button>
+                </div>
               </div>
 
               {showCustomAvatarInput && (
-                <form onSubmit={handleApplyCustomAvatar} className="mb-2.5 flex gap-1.5">
+                <form onSubmit={handleApplyCustomAvatar} className="flex gap-1.5 animate-in fade-in">
                   <input
                     type="url"
                     placeholder="https://example.com/avatar.jpg"
                     value={customAvatarUrl}
                     onChange={e => setCustomAvatarUrl(e.target.value)}
-                    className="flex-1 text-[11px] px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-emerald-600"
+                    className="flex-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-emerald-600"
                   />
                   <button
                     type="submit"
-                    className="px-2.5 py-1.5 bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                    className="px-2.5 py-1.5 bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer"
                   >
                     Apply
                   </button>
                 </form>
               )}
 
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
                 {avatarOptions.map((av, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => {
-                      setFormData({ ...formData, avatar: av });
+                      setFormData(prev => ({ ...prev, avatar: av }));
                       updateAdminProfile({ avatar: av });
                       triggerToast('Avatar updated!');
                     }}
-                    className={`w-9 h-9 rounded-full overflow-hidden border-2 transition-transform cursor-pointer ${
+                    className={`w-9 h-9 rounded-full overflow-hidden border-2 transition-transform cursor-pointer shrink-0 ${
                       adminProfile.avatar === av
-                        ? 'border-[#15803d] ring-2 ring-emerald-300 scale-105'
-                        : 'border-slate-200 hover:border-slate-400'
+                        ? 'border-[#15803d] ring-2 ring-emerald-300 scale-105 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-400 opacity-85 hover:opacity-100'
                     }`}
                   >
                     <img src={av} alt="Option" className="w-full h-full object-cover" />

@@ -197,7 +197,7 @@ export const LoginPage: React.FC = () => {
 
       {/* Clean Bottom Footer */}
       <footer className="relative z-10 p-4 text-center text-slate-400 text-[11px] border-t border-slate-200 bg-white">
-        © 2026 FarmerBox Technologies Private Limited • Super Admin Operations Console
+        © 2026 FarmerBox Technologies Private Limited • Super Admin Operations Console create by CanaryTechsys
       </footer>
     </div>
   );
