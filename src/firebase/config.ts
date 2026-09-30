@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { getAuth, type Auth } from 'firebase/auth';
 
@@ -62,7 +62,14 @@ let auth: Auth | null = null;
 if (isFirebaseConfigured()) {
   try {
     app = getApps().length === 0 ? initializeApp(currentFirebaseConfig) : getApps()[0];
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        ignoreUndefinedProperties: true
+      });
+    } catch {
+      db = getFirestore(app);
+    }
     storage = getStorage(app);
     auth = getAuth(app);
   } catch (err) {
