@@ -38,7 +38,9 @@ export const AddHotelScreen: React.FC = () => {
     try {
       await addHotel({
         name: hotelName,
+        ownerName: ownerName,
         contactPerson: ownerName,
+        mobile: mobile,
         phone: mobile,
         address,
         zone,

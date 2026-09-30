@@ -774,24 +774,34 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const docId = `HT${Date.now().toString().slice(-6)}`;
+    const regDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const hotelToSave: any = {
       id: docId,
       hotelId: docId,
       name: newHotel.name,
-      zone: newHotel.zone || userProfile.zone.replace(' Zone', ''),
-      orders: 0,
-      status: 'Active',
-      image: newHotel.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=100',
+      ownerName: newHotel.ownerName || newHotel.contactPerson || 'Manager',
       contactPerson: newHotel.contactPerson || newHotel.ownerName || 'Manager',
       phone: newHotel.phone || newHotel.mobile || '',
-      address: newHotel.address || '',
-      gst: newHotel.gst || '',
-      fssai: newHotel.fssai || '',
+      mobile: newHotel.mobile || newHotel.phone || '',
+      email: newHotel.email || '',
+      zone: newHotel.zone || userProfile.zone.replace(' Zone', ''),
+      orders: 0,
+      totalOrders: 0,
+      totalSpent: 0,
+      status: 'Active',
+      image: newHotel.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=100',
+      address: newHotel.address || `${newHotel.zone || userProfile.zone}, Pune`,
+      gstNumber: newHotel.gst || newHotel.gstNumber || '',
+      fssaiNumber: newHotel.fssai || newHotel.fssaiNumber || '',
       type: newHotel.type || 'Restaurant',
+      joiner: userProfile.name,
       assignedJoiner: userProfile.name,
       joinedBy: userProfile.uid,
       joinerId: userProfile.uid,
+      joinerPhone: userProfile.phone || '',
       dailyOrderKg: 0,
+      registrationDate: regDate,
+      joinedDate: regDate,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -802,6 +812,51 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const updatedProfile = { ...userProfile, totalHotels: (userProfile.totalHotels || 0) + 1 };
     setUserProfile(updatedProfile);
+
+    // Sync Joiner document totalHotels and assigned list in Firestore
+    if (db && userProfile.uid) {
+      try {
+        const cleanPhone = (userProfile.phone || '').replace(/\D/g, '');
+        const joinerDocId = userProfile.uid.startsWith('usr_') ? userProfile.uid : `usr_${cleanPhone || userProfile.uid}`;
+        const joinerRef = doc(db, 'joiners', joinerDocId);
+        getDoc(joinerRef).then((snap) => {
+          if (snap.exists()) {
+            const currentData = snap.data();
+            const currentHotels = Number(currentData.totalHotels || 0);
+            const existingList = currentData.assignedHotelsList || [];
+            setDoc(joinerRef, {
+              totalHotels: currentHotels + 1,
+              assignedHotelsList: [...existingList, {
+                id: docId,
+                name: hotelToSave.name,
+                location: hotelToSave.zone,
+                owner: hotelToSave.ownerName,
+                phone: hotelToSave.phone,
+                status: 'Active',
+                joinedDate: regDate
+              }],
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        }).catch(() => {});
+      } catch (e) {
+        console.warn('Error syncing joiner record:', e);
+      }
+    }
+
+    // Save Admin Notification in Firestore
+    saveRecord<any>('notifications', {
+      id: `notif_${Date.now()}`,
+      title: 'New Hotel Registered! 🏨',
+      message: `${hotelToSave.name} in ${hotelToSave.zone} registered by ${userProfile.name}`,
+      category: 'Hotels',
+      userType: 'Hotels',
+      time: 'Just now',
+      date: regDate,
+      read: false,
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    });
 
     addNotification({
       title: 'Hotel Partner Added!',
@@ -964,7 +1019,8 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       hotelName: orderData.hotelName || (hotelObj ? hotelObj.name : 'Selected Hotel'),
       hotelZone: orderData.hotelZone || (hotelObj ? hotelObj.zone : userProfile.zone.replace(' Zone', '')),
       zone: orderData.hotelZone || (hotelObj ? hotelObj.zone : userProfile.zone.replace(' Zone', '')),
-      joiner: userProfile.name || '',
+      joiner: userProfile.name || 'Joiner Partner',
+      assignedJoiner: userProfile.name || 'Joiner Partner',
       joinerId: userProfile.uid,
       joinedBy: userProfile.uid,
       joinerPhone: userProfile.phone || '',
@@ -978,8 +1034,8 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       paymentMode: 'Online',
       paymentMethod: 'Online',
       paymentStatus: 'Pending',
-      driver: 'Assigned upon dispatch',
-      deliveryPartnerId: 'DR01',
+      driver: 'Not Assigned',
+      deliveryPartnerId: '',
       status: 'Pending',
       orderStatus: 'Pending',
       isBonusEligible: true,
@@ -989,12 +1045,33 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       walletCredited: false,
       items: mappedItems,
       rawItems: [...cart],
+      createdAt: new Date().toISOString(),
       ...orderData
     };
 
     saveRecord('orders', newOrder, orderId);
 
-    // Increment joiner totalOrders count in Firestore
+    // Update Hotel orders count and total spent in Firestore
+    if (db && newOrder.hotelId) {
+      try {
+        const hotelRef = doc(db, 'hotels', String(newOrder.hotelId));
+        getDoc(hotelRef).then(snap => {
+          if (snap.exists()) {
+            const hData = snap.data();
+            setDoc(hotelRef, {
+              orders: Number(hData.orders || 0) + 1,
+              totalOrders: Number(hData.totalOrders || 0) + 1,
+              totalSpent: Number(hData.totalSpent || 0) + finalAmount,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        }).catch(() => {});
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Increment joiner totalOrders and totalEarnings count in Firestore
     if (db && userProfile.uid) {
       try {
         const cleanPhone = (userProfile.phone || '').replace(/\D/g, '');
@@ -1004,8 +1081,12 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (snap.exists()) {
             const data = snap.data();
             const currentOrders = Number(data.totalOrders || 0);
+            const currentEarnings = Number(data.totalEarnings || data.commissionEarned || 0);
             setDoc(joinerRef, {
               totalOrders: currentOrders + 1,
+              totalEarnings: currentEarnings + 100,
+              commissionEarned: currentEarnings + 100,
+              walletBalance: Number(data.walletBalance || 0) + 100,
               updatedAt: new Date().toISOString()
             }, { merge: true });
           }
@@ -1014,6 +1095,20 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
         // ignore
       }
     }
+
+    // Save Admin Notification in Firestore
+    saveRecord<any>('notifications', {
+      id: `notif_${Date.now()}_ord`,
+      title: 'New B2B Hotel Order! 🥦',
+      message: `${newOrder.hotelName} placed order ${orderId} for ₹${finalAmount}`,
+      category: 'Orders',
+      userType: 'Orders',
+      time: 'Just now',
+      date: newOrder.date,
+      read: false,
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    });
 
     setOrders(prev => [newOrder, ...prev]);
     setLastPlacedOrder(newOrder);
