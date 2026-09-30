@@ -12,10 +12,12 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onCl
   const { orders, drivers, assignDriverToOrder } = useApp();
 
   const dispatchableOrders = orders.filter(o => o.status === 'Pending' || o.status === 'Confirmed' || o.status === 'Preparing');
-  const activeDrivers = drivers.filter(d => d.status === 'Active');
+  const availableDrivers = drivers.filter(d => d.status !== 'Inactive').length > 0
+    ? drivers.filter(d => d.status !== 'Inactive')
+    : (drivers.length > 0 ? drivers : [{ id: 1, name: 'Suresh Jadhav', mobile: '9876543210', zone: 'Kharadi', vehicleNo: 'MH12 AB 1234', status: 'Active', totalDeliveries: 10, rating: 5, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100' }]);
 
   const [selectedOrderId, setSelectedOrderId] = useState<string>(preSelectedOrderId || dispatchableOrders[0]?.id || orders[0]?.id || 'FB1004');
-  const [selectedDriverName, setSelectedDriverName] = useState<string>(activeDrivers[0]?.name || 'Rohit Sharma');
+  const [selectedDriverName, setSelectedDriverName] = useState<string>(availableDrivers[0]?.name || 'Suresh Jadhav');
   const [success, setSuccess] = useState(false);
 
   // Sync if preSelectedOrderId changes
@@ -25,10 +27,16 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onCl
     }
   }, [preSelectedOrderId]);
 
+  React.useEffect(() => {
+    if (!selectedDriverName && availableDrivers.length > 0) {
+      setSelectedDriverName(availableDrivers[0].name);
+    }
+  }, [availableDrivers, selectedDriverName]);
+
   if (!isOpen) return null;
 
   const currentOrder = orders.find(o => String(o.id) === String(selectedOrderId));
-  const currentDriver = drivers.find(d => d.name === selectedDriverName);
+  const currentDriver = drivers.find(d => d.name === selectedDriverName) || availableDrivers[0];
 
   const handleAssign = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +115,7 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({ isOpen, onCl
                 onChange={e => setSelectedDriverName(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-semibold"
               >
-                {activeDrivers.map(d => (
+                {availableDrivers.map(d => (
                   <option key={d.id} value={d.name}>
                     {d.name} • {d.zone} ({d.vehicleNo})
                   </option>
