@@ -27,7 +27,6 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import type { Joiner, Hotel } from '../types';
 import { JoinerHotelsModal } from '../components/Modals/JoinerHotelsModal';
 import { getHotelsForJoiner } from '../data/joinerHotelsData';
-import { initialJoiners } from '../mockData';
 
 export const JoinersPage: React.FC = () => {
   const {
@@ -60,7 +59,6 @@ export const JoinersPage: React.FC = () => {
     status: 'Active' as 'Active' | 'Inactive'
   });
   const [isHotelsListModalOpen, setIsHotelsListModalOpen] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // Available zones list with fallback Pune zones
   const availableZones = useMemo(() => {
@@ -238,20 +236,6 @@ export const JoinersPage: React.FC = () => {
     setActiveTab('Hotels');
   };
 
-  // Seed sample joiners data if database is empty
-  const handleLoadDemoJoiners = async () => {
-    setIsSeeding(true);
-    try {
-      for (const j of initialJoiners.slice(0, 10)) {
-        await addJoiner(j.name, j.mobile, j.zone, j.email, j.status);
-      }
-    } catch (err) {
-      console.error('Failed to seed demo joiners:', err);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   const activeCount = joiners.filter(j => (j.status || 'Active') === 'Active').length;
   const inactiveCount = joiners.filter(j => j.status === 'Inactive').length;
 
@@ -400,14 +384,6 @@ export const JoinersPage: React.FC = () => {
                 className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add First Joiner
-              </button>
-              <button
-                onClick={handleLoadDemoJoiners}
-                disabled={isSeeding}
-                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                {isSeeding ? 'Loading...' : 'Load Demo Joiners'}
               </button>
             </div>
           </div>

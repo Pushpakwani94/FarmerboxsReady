@@ -42,7 +42,7 @@ import { JoinerCommissionHistoryModal } from '../components/Modals/JoinerCommiss
 import { EditCommissionModal } from '../components/Modals/EditCommissionModal';
 
 export const CommissionPage: React.FC = () => {
-  const { joiners, orders, isDatabaseConnected, updateJoiner } = useApp();
+  const { joiners, orders, payments, isDatabaseConnected, updateJoiner } = useApp();
 
   // Dynamically compute commission list from live Firestore / state data
   const dynamicCommissionList = useMemo<JoinerCommissionRecord[]>(() => {
@@ -144,7 +144,7 @@ export const CommissionPage: React.FC = () => {
         bankName: j.bankName || 'HDFC Bank',
         accountNo: j.accountNo || '•••• •••• 4521',
         ifscCode: j.ifscCode || 'HDFC0001234',
-        walletBalance: pendingAmount,
+        walletBalance: (j as any).walletBalance !== undefined && Number((j as any).walletBalance) > 0 ? Number((j as any).walletBalance) : pendingAmount,
         recentTransactions
       };
     });
@@ -153,11 +153,39 @@ export const CommissionPage: React.FC = () => {
   // Master state
   const [commissionList, setCommissionList] = useState<JoinerCommissionRecord[]>(dynamicCommissionList);
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>(isDatabaseConnected ? [] : initialPayoutRequests);
-  const [paymentHistory, setPaymentHistory] = useState(isDatabaseConnected ? [] : initialPaymentHistory);
+
+  const livePaymentHistory = useMemo(() => {
+    if (payments && payments.length > 0) {
+      return payments.map((p, idx) => {
+        const matchedJoiner = joiners.find(j => 
+          (p.fromTo && j.name && j.name.toLowerCase() === p.fromTo.toLowerCase()) ||
+          (p.orderId && orders.some(o => o.id === p.orderId && o.joiner === j.name))
+        );
+        return {
+          id: String(p.id || idx + 1),
+          date: p.dateTime || 'Today',
+          joinerName: p.fromTo || matchedJoiner?.name || 'Joiner Partner',
+          mobile: matchedJoiner?.mobile || '9876543210',
+          zone: matchedJoiner?.zone || 'Baner',
+          amount: Number(p.amount || 100),
+          mode: p.paymentMode || 'Wallet',
+          utr: p.referenceId || `TXN${Math.floor(100000 + Math.random() * 900000)}`,
+          status: p.status || 'Success'
+        };
+      });
+    }
+    return isDatabaseConnected ? [] : initialPaymentHistory;
+  }, [payments, joiners, orders, isDatabaseConnected]);
+
+  const [paymentHistory, setPaymentHistory] = useState(livePaymentHistory);
 
   useEffect(() => {
     setCommissionList(dynamicCommissionList);
   }, [dynamicCommissionList]);
+
+  useEffect(() => {
+    setPaymentHistory(livePaymentHistory);
+  }, [livePaymentHistory]);
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<'Commission List' | 'Joiner Wallets' | 'Payment History' | 'Payout Requests'>('Commission List');

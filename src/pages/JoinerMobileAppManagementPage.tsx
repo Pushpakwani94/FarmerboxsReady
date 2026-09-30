@@ -121,9 +121,9 @@ export const JoinerMobileAppManagementPage: React.FC = () => {
   const filteredHotels = useMemo(() => {
     return hotels.filter(h => {
       const matchSearch =
-        h.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        h.joiner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        h.zone.toLowerCase().includes(searchTerm.toLowerCase());
+        (h.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (h.joiner || h.assignedJoiner || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (h.zone || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchZone = zoneFilter === 'All Zones' || h.zone === zoneFilter;
       return matchSearch && matchZone;
     });

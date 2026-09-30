@@ -59,13 +59,21 @@ export const HotelsPage: React.FC = () => {
   });
 
   const filteredHotels = hotels.filter(h => {
-    const nameMatch = (h.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const ownerMatch = (h.ownerName || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const zoneMatch = (h.zone || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSearch = nameMatch || ownerMatch || zoneMatch;
+    const term = searchTerm.toLowerCase();
+    const joinerStr = (h.joiner || h.assignedJoiner || '').toLowerCase();
+    const ownerStr = (h.ownerName || h.contactPerson || '').toLowerCase();
+    const phoneStr = String(h.mobile || h.phone || '');
+    const nameMatch = (h.name || '').toLowerCase().includes(term);
+    const ownerMatch = ownerStr.includes(term);
+    const zoneMatch = (h.zone || '').toLowerCase().includes(term);
+    const joinerMatch = joinerStr.includes(term);
+    const phoneMatch = phoneStr.includes(term);
+    const matchesSearch = !searchTerm || nameMatch || ownerMatch || zoneMatch || joinerMatch || phoneMatch;
 
     const matchesZone = selectedZone === 'All Zones' || h.zone === selectedZone;
-    const matchesJoiner = selectedJoiner === 'All Joiners' || h.joiner === selectedJoiner;
+    const matchesJoiner = selectedJoiner === 'All Joiners' || 
+      (h.joiner && h.joiner.toLowerCase() === selectedJoiner.toLowerCase()) ||
+      (h.assignedJoiner && h.assignedJoiner.toLowerCase() === selectedJoiner.toLowerCase());
 
     return matchesSearch && matchesZone && matchesJoiner;
   });

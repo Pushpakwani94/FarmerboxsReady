@@ -204,23 +204,26 @@ const AdminAppRoot: React.FC = () => {
 };
 
 export default function App() {
+  // Check if explicitly requested Customer B2C App
   const isCustomerAppMode = 
     typeof window !== 'undefined' &&
     (window.location.search.includes('app=customer') ||
       window.location.hash.includes('customer-app') ||
       window.location.search.includes('mode=b2c') ||
-      localStorage.getItem('farmerbox_mobile_mode') === 'customer' ||
-      (Capacitor.isNativePlatform() && localStorage.getItem('farmerbox_mobile_mode') !== 'joiner'));
+      localStorage.getItem('farmerbox_mobile_mode') === 'customer');
 
-  const isMobileMode =
+  // Native Mobile APK always opens Hotel Joiner B2B App
+  const isHotelJoinerB2BMode =
     !isCustomerAppMode &&
     typeof window !== 'undefined' &&
     (Capacitor.isNativePlatform() ||
       window.location.search.includes('mode=mobile') ||
       window.location.search.includes('app=joiner') ||
+      window.location.search.includes('mode=b2b') ||
+      localStorage.getItem('farmerbox_mobile_mode') === 'joiner' ||
       navigator.userAgent.includes('FarmerBox'));
 
-  const [showSplash, setShowSplash] = useState(!isMobileMode && !isCustomerAppMode);
+  const [showSplash, setShowSplash] = useState(!isHotelJoinerB2BMode && !isCustomerAppMode);
 
   if (isCustomerAppMode) {
     return <CustomerMobileApp isEmbedded={false} />;
@@ -228,8 +231,8 @@ export default function App() {
 
   return (
     <>
-      {showSplash && !isMobileMode && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      {isMobileMode ? (
+      {showSplash && !isHotelJoinerB2BMode && <SplashScreen onFinish={() => setShowSplash(false)} />}
+      {isHotelJoinerB2BMode ? (
         <StandaloneMobileApp />
       ) : (
         <AppProvider>

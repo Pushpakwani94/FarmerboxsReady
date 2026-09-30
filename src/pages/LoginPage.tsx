@@ -7,7 +7,8 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
-  KeyRound
+  KeyRound,
+  Loader2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -114,6 +115,13 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Animated Progress Bar when Loading */}
+          {isLoading && (
+            <div className="w-full bg-emerald-100 h-1 overflow-hidden relative">
+              <div className="h-full bg-emerald-600 animate-indeterminate" />
+            </div>
+          )}
+
           <div className="p-5 sm:p-7 space-y-4 sm:space-y-5">
             {/* Error Message */}
             {errorMsg && (
@@ -178,10 +186,13 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-700/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-700/20 flex items-center justify-center gap-2 cursor-pointer transition-all relative overflow-hidden"
               >
                 {isLoading ? (
-                  <span>Signing in...</span>
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Signing in to Admin Console...</span>
+                  </>
                 ) : (
                   <>
                     <span>Sign In to Admin Console</span>

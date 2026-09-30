@@ -8,6 +8,12 @@ $publicApk = "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\public\fa
 
 Write-Host "=== FarmerBox Joiner Capacitor APK Builder & Installer ===" -ForegroundColor Cyan
 
+# 0. Clean prior APK files to prevent bundling them into Vite web assets
+Write-Host "`n0. Cleaning previous APK files from public and assets..." -ForegroundColor Yellow
+Remove-Item -Path "public\*.apk" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "dist\*.apk" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "android\app\src\main\assets\public\*.apk" -Force -ErrorAction SilentlyContinue
+
 # 1. Build Vite web assets
 Write-Host "`n1. Building Vite web assets..." -ForegroundColor Yellow
 npm run build

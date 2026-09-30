@@ -172,6 +172,16 @@ import {
 import { initialDriversList } from '../data/driversData';
 import { initialProductsList } from '../data/productsData';
 
+// One-time purge of legacy mock data from browser storage
+if (typeof window !== 'undefined') {
+  const CLEAN_MOCK_VERSION = 'farmerbox_cleaned_dummy_data_v2';
+  if (localStorage.getItem(CLEAN_MOCK_VERSION) !== 'true') {
+    const keysToPurge = ['orders', 'joiners', 'drivers', 'hotels', 'payments', 'notifications'];
+    keysToPurge.forEach((k) => localStorage.removeItem(`farmerbox_${k}`));
+    localStorage.setItem(CLEAN_MOCK_VERSION, 'true');
+  }
+}
+
 // Helper to read persisted local data with fallback
 const getStoredOrFallback = <T,>(key: string, fallback: T[]): T[] => {
   if (typeof window === 'undefined') return fallback;
@@ -203,15 +213,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isConnected = isFirebaseConfigured();
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  // Primary application state — initialized from localStorage if available, else initial mock data
-  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', initialOrders));
-  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', initialZones));
-  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', initialJoiners));
-  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', initialDriversList));
-  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', initialHotels));
+  // Primary application state — initialized from localStorage if available, otherwise empty dynamic array
+  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', []));
+  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', []));
+  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', []));
+  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', []));
+  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', []));
   const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', initialProductsList));
-  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', initialPayments));
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', initialNotifications));
+  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', []));
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', []));
 
   // Sync state changes to localStorage
   useEffect(() => { saveToLocal('orders', orders); }, [orders]);
@@ -223,42 +233,118 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { saveToLocal('payments', payments); }, [payments]);
   useEffect(() => { saveToLocal('notifications', notifications); }, [notifications]);
 
-  // Subscriptions strictly to Cloud Firestore (only overwrite when Firestore has actual records)
+  // Subscriptions strictly to Cloud Firestore in real-time
   useEffect(() => {
     const handleErr = (err: Error) => {
       setFirestoreError(err.message || 'Firestore connection error');
     };
 
-    const unsubOrders = subscribeToCollection<Order>('orders', (data) => {
-      if (data && data.length > 0) setOrders(data);
+    const unsubOrders = subscribeToCollection<any>('orders', (data) => {
+      const normalizedOrders: Order[] = (data || []).map((ord: any) => ({
+        ...ord,
+        id: String(ord.id || ord.orderId || `FB${Math.floor(1000 + Math.random() * 9000)}`),
+        orderId: String(ord.orderId || ord.id || ''),
+        hotelName: ord.hotelName || 'Hotel Partner',
+        hotelId: ord.hotelId || '',
+        joiner: ord.joiner || ord.joinerName || ord.assignedJoiner || 'Direct Partner',
+        joinerId: ord.joinerId || ord.joinedBy || '',
+        zone: ord.zone || ord.hotelZone || 'Baner',
+        amount: Number(ord.amount || ord.totalAmount || ord.subtotal || 0),
+        totalAmount: Number(ord.totalAmount || ord.amount || ord.subtotal || 0),
+        date: ord.date || ord.orderDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: ord.time || '10:00 AM',
+        status: ord.status || ord.orderStatus || 'Pending',
+        orderStatus: ord.orderStatus || ord.status || 'Pending',
+        paymentMode: ord.paymentMode || ord.paymentMethod || 'Online',
+        paymentStatus: ord.paymentStatus || 'Pending',
+        driver: ord.driver || 'Not Assigned',
+        driverPhone: ord.driverPhone || '',
+        commission: Number(ord.commission ?? 100),
+        walletCredited: Boolean(ord.walletCredited || (ord.status === 'Delivered' && ord.bonusStatus?.includes('Credited'))),
+        items: (ord.items && ord.items.length > 0)
+          ? ord.items.map((item: any, i: number) => ({
+              id: item.id || item.productId || i + 1,
+              productName: item.productName || item.name || 'Produce Item',
+              qty: Number(item.qty || item.quantity || (typeof item.qty === 'string' ? parseFloat(item.qty) : 1)),
+              unit: item.unit || 'KG',
+              price: Number(item.price || 0),
+              total: Number(item.total || ((item.price || 0) * (item.quantity || item.qty || 1)))
+            }))
+          : []
+      }));
+      setOrders(normalizedOrders);
     }, handleErr);
 
     const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
-      if (z && z.length > 0) {
-        setZones(z);
-        setSelectedZone(prev => prev ? (z.find(item => String(item.id) === String(prev.id)) || z[0] || null) : (z[0] || null));
-      }
+      const validZones = z || [];
+      setZones(validZones);
+      setSelectedZone(prev => prev ? (validZones.find(item => String(item.id) === String(prev.id)) || validZones[0] || null) : (validZones[0] || null));
     }, handleErr);
 
-    const unsubJoiners = subscribeToCollection<Joiner>('joiners', (j) => {
-      if (j && j.length > 0) {
-        setJoiners(j);
-        setSelectedJoiner(prev => prev ? (j.find(item => String(item.id) === String(prev.id)) || j[0] || null) : (j[0] || null));
-      }
+    const unsubJoiners = subscribeToCollection<any>('joiners', (j) => {
+      const normalizedJoiners: Joiner[] = (j || []).map((item: any, idx: number) => ({
+        ...item,
+        id: item.id || `usr_${idx + 1}`,
+        name: item.name || 'Joiner Partner',
+        mobile: item.mobile || item.phone || '',
+        phone: item.phone || item.mobile || '',
+        email: item.email || `${(item.name || 'joiner').toLowerCase().replace(/\s+/g, '')}@farmerbox.in`,
+        zone: item.zone || 'Baner',
+        joinerCode: item.joinerCode || `JB${String(item.id || '').replace(/\D/g, '').slice(-4) || (1001 + idx)}`,
+        status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+        totalHotels: Number(item.totalHotels || item.hotelsCount || 0),
+        totalOrders: Number(item.totalOrders || item.ordersCount || 0),
+        totalEarnings: Number(item.totalEarnings || item.commissionEarned || (item.walletBalance || 0)),
+        commissionEarned: Number(item.commissionEarned || item.totalEarnings || (item.walletBalance || 0)),
+        walletBalance: Number(item.walletBalance ?? item.totalEarnings ?? 0),
+        paidAmount: Number(item.paidAmount ?? 0),
+        pendingAmount: Number(item.pendingAmount ?? item.walletBalance ?? 0),
+        avatar: item.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+        upiId: item.upiId || `${(item.name || 'joiner').toLowerCase().replace(/\s+/g, '')}@okaxis`,
+        bankName: item.bankName || 'HDFC Bank',
+        accountNo: item.accountNo || '•••• •••• 4521',
+        ifscCode: item.ifscCode || 'HDFC0001234'
+      }));
+      setJoiners(normalizedJoiners);
+      setSelectedJoiner(prev => prev ? (normalizedJoiners.find(item => String(item.id) === String(prev.id)) || normalizedJoiners[0] || null) : (normalizedJoiners[0] || null));
     }, handleErr);
 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {
-      if (d && d.length > 0) {
-        setDrivers(d);
-        setSelectedDriver(prev => prev ? (d.find(item => String(item.id) === String(prev.id)) || d[0] || null) : (d[0] || null));
-      }
+      const validDrivers = d || [];
+      setDrivers(validDrivers);
+      setSelectedDriver(prev => prev ? (validDrivers.find(item => String(item.id) === String(prev.id)) || validDrivers[0] || null) : (validDrivers[0] || null));
     }, handleErr);
 
-    const unsubHotels = subscribeToCollection<Hotel>('hotels', (h) => {
-      if (h && h.length > 0) {
-        setHotels(h);
-        setSelectedHotel(prev => prev ? (h.find(item => String(item.id) === String(prev.id)) || h[0] || null) : (h[0] || null));
-      }
+    const unsubHotels = subscribeToCollection<any>('hotels', (h) => {
+      const normalizedHotels: Hotel[] = (h || []).map((item: any, idx: number) => ({
+        ...item,
+        id: item.id || `HT${Date.now().toString().slice(-6)}_${idx}`,
+        name: item.name || 'Unnamed Hotel',
+        ownerName: item.ownerName || item.contactPerson || 'Manager',
+        contactPerson: item.contactPerson || item.ownerName || 'Manager',
+        mobile: item.mobile || item.phone || '',
+        phone: item.phone || item.mobile || '',
+        email: item.email || '',
+        zone: item.zone || 'Baner',
+        joiner: item.joiner || item.assignedJoiner || 'Direct Partner',
+        assignedJoiner: item.assignedJoiner || item.joiner || 'Direct Partner',
+        joinedBy: item.joinedBy || item.joinerId || '',
+        joinerId: item.joinerId || item.joinedBy || '',
+        address: item.address || `${item.zone || 'Baner'}, Pune`,
+        totalOrders: Number(item.totalOrders ?? item.orders ?? 0),
+        orders: Number(item.orders ?? item.totalOrders ?? 0),
+        dailyOrderKg: Number(item.dailyOrderKg ?? 0),
+        type: item.type || 'Restaurant',
+        totalSpent: Number(item.totalSpent ?? 0),
+        registrationDate: item.registrationDate || item.joinedDate || item.createdAt?.slice?.(0, 10) || '2026-09-01',
+        gstNumber: item.gstNumber || item.gst || '',
+        fssaiNumber: item.fssaiNumber || item.fssai || '',
+        rating: Number(item.rating || 4.8),
+        status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+        image: item.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'
+      }));
+      setHotels(normalizedHotels);
+      setSelectedHotel(prev => prev ? (normalizedHotels.find(item => String(item.id) === String(prev.id)) || normalizedHotels[0] || null) : (normalizedHotels[0] || null));
     }, handleErr);
 
     const unsubProducts = subscribeToCollection<Product>('products', (p) => {

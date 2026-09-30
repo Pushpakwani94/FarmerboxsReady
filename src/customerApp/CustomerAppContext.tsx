@@ -433,8 +433,21 @@ export const CustomerAppProvider: React.FC<{ children: ReactNode; initialScreen?
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'UPI' | 'Card' | 'NetBanking' | 'COD'>('UPI');
   const [lastPlacedOrder, setLastPlacedOrder] = useState<CustomerOrder | null>(null);
 
-  // Orders
-  const [orders, setOrders] = useState<CustomerOrder[]>(initialOrders);
+  // Orders - Clean dynamic state
+  const [orders, setOrders] = useState<CustomerOrder[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('farmerbox_customer_orders');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return [];
+  });
 
   // Wishlist
   const [wishlist, setWishlist] = useState<number[]>([43, 46, 17, 5]);
