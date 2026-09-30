@@ -213,15 +213,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isConnected = isFirebaseConfigured();
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  // Primary application state — initialized from localStorage if available, otherwise empty dynamic array
-  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', []));
-  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', []));
-  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', []));
-  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', []));
-  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', []));
+  // Primary application state — initialized from localStorage if available, otherwise starter records
+  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', initialOrders));
+  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', initialZones));
+  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', initialJoiners));
+  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', initialDrivers));
+  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', initialHotels));
   const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', initialProductsList));
-  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', []));
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', []));
+  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', initialPayments));
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', initialNotifications));
 
   // Sync state changes to localStorage
   useEffect(() => { saveToLocal('orders', orders); }, [orders]);
@@ -240,6 +240,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const unsubOrders = subscribeToCollection<any>('orders', (data) => {
+      if (!data || data.length === 0) {
+        if (isFirebaseConfigured() && db && initialOrders.length > 0) {
+          initialOrders.forEach(ord => {
+            saveRecord('orders', ord, String(ord.id));
+          });
+        }
+        setOrders(initialOrders);
+        return;
+      }
+
       const normalizedOrders: Order[] = (data || []).map((ord: any) => ({
         ...ord,
         id: String(ord.id || ord.orderId || `FB${Math.floor(1000 + Math.random() * 9000)}`),
@@ -276,7 +286,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
-      const validZones = z || [];
+      const validZones = (z && z.length > 0) ? z : initialZones;
+      if ((!z || z.length === 0) && isFirebaseConfigured() && db && initialZones.length > 0) {
+        initialZones.forEach(zone => {
+          saveRecord('zones', zone, String(zone.id));
+        });
+      }
       setZones(validZones);
       setSelectedZone(prev => prev ? (validZones.find(item => String(item.id) === String(prev.id)) || validZones[0] || null) : (validZones[0] || null));
     }, handleErr);
@@ -344,7 +359,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const unsubJoiners = subscribeToCollection<any>('joiners', (j) => {
-      rawJoiners = j || [];
+      if ((!j || j.length === 0) && isFirebaseConfigured() && db && initialJoiners.length > 0) {
+        initialJoiners.forEach(joiner => {
+          saveRecord('joiners', joiner, String(joiner.id));
+        });
+      }
+      rawJoiners = (j && j.length > 0) ? j : initialJoiners;
       syncAndNormalizeJoiners();
     }, handleErr);
 
@@ -354,13 +374,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {
-      const validDrivers = d || [];
+      const validDrivers = (d && d.length > 0) ? d : initialDrivers;
+      if ((!d || d.length === 0) && isFirebaseConfigured() && db && initialDrivers.length > 0) {
+        initialDrivers.forEach(drv => {
+          saveRecord('drivers', drv, String(drv.id));
+        });
+      }
       setDrivers(validDrivers);
       setSelectedDriver(prev => prev ? (validDrivers.find(item => String(item.id) === String(prev.id)) || validDrivers[0] || null) : (validDrivers[0] || null));
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<any>('hotels', (h) => {
-      const normalizedHotels: Hotel[] = (h || []).map((item: any, idx: number) => ({
+      const rawHotelsList = (h && h.length > 0) ? h : initialHotels;
+      if ((!h || h.length === 0) && isFirebaseConfigured() && db && initialHotels.length > 0) {
+        initialHotels.forEach(hotel => {
+          saveRecord('hotels', hotel, String(hotel.id));
+        });
+      }
+      const normalizedHotels: Hotel[] = rawHotelsList.map((item: any, idx: number) => ({
         ...item,
         id: item.id || `HT${Date.now().toString().slice(-6)}_${idx}`,
         name: item.name || 'Unnamed Hotel',
