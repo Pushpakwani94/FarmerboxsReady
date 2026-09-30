@@ -67,17 +67,28 @@ export const OrdersPage: React.FC = () => {
   const [newDriver, setNewDriver] = useState(drivers[0]?.name || 'Suresh');
 
   const filteredOrders = orders.filter(o => {
+    const searchLower = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      (o.hotelName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.joiner || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o.driver || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesZone = selectedZone === 'All Zones' || o.zone === selectedZone;
-    const matchesHotel = selectedHotelFilter === 'All Hotels' || o.hotelName === selectedHotelFilter;
-    const matchesJoiner = selectedJoinerFilter === 'All Joiners' || o.joiner === selectedJoinerFilter;
-    const matchesDriver = selectedDriverFilter === 'All Drivers' || o.driver === selectedDriverFilter;
-    const matchesStatus = statusFilter === 'All Status' || o.status === statusFilter;
-    const matchesPayment = paymentFilter === 'All Payments' || o.paymentMode === paymentFilter;
+      !searchLower ||
+      (o.hotelName || '').toLowerCase().includes(searchLower) ||
+      (o.id || '').toLowerCase().includes(searchLower) ||
+      (o.orderId || '').toLowerCase().includes(searchLower) ||
+      (o.joiner || '').toLowerCase().includes(searchLower) ||
+      (o.driver || '').toLowerCase().includes(searchLower) ||
+      (o.zone || '').toLowerCase().includes(searchLower);
+
+    const cleanOrdZone = (o.zone || '').trim().toLowerCase().replace(' zone', '');
+    const cleanFilterZone = selectedZone.trim().toLowerCase().replace(' zone', '');
+    const matchesZone = selectedZone === 'All Zones' || cleanOrdZone === cleanFilterZone || cleanOrdZone.includes(cleanFilterZone) || cleanFilterZone.includes(cleanOrdZone);
+
+    const matchesHotel = selectedHotelFilter === 'All Hotels' || (o.hotelName || '').trim().toLowerCase() === selectedHotelFilter.trim().toLowerCase();
+    const matchesJoiner = selectedJoinerFilter === 'All Joiners' || (o.joiner || '').trim().toLowerCase() === selectedJoinerFilter.trim().toLowerCase();
+    const matchesDriver = selectedDriverFilter === 'All Drivers' || (o.driver || '').trim().toLowerCase() === selectedDriverFilter.trim().toLowerCase();
+    const matchesStatus = statusFilter === 'All Status' || (o.status || '').trim().toLowerCase() === statusFilter.trim().toLowerCase();
+
+    const ordPayment = (o.paymentMode || '').toLowerCase();
+    const filterPayment = paymentFilter.toLowerCase();
+    const matchesPayment = paymentFilter === 'All Payments' || ordPayment.includes(filterPayment) || filterPayment.includes(ordPayment);
 
     return matchesSearch && matchesZone && matchesHotel && matchesJoiner && matchesDriver && matchesStatus && matchesPayment;
   });
@@ -376,14 +387,37 @@ export const OrdersPage: React.FC = () => {
 
         {/* Orders Table */}
         {filteredOrders.length === 0 ? (
-          <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-            <p className="text-xs font-semibold text-slate-700">No orders match your filter criteria.</p>
-            <button
-              onClick={handleResetFilters}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
-            >
-              Reset Filters
-            </button>
+          <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+              <Package className="w-6 h-6" />
+            </div>
+            <div className="max-w-md mx-auto">
+              <h4 className="font-bold text-sm text-slate-800">
+                {orders.length === 0 ? 'No Orders in System Yet' : 'No Orders Match Your Filter'}
+              </h4>
+              <p className="text-xs text-slate-500 mt-1">
+                {orders.length === 0
+                  ? 'Orders placed by hotel partners via the mobile app or created by administrators will appear here in real time.'
+                  : 'Try resetting the zone, status, or search filters to view all available orders.'}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              {orders.length === 0 ? (
+                <button
+                  onClick={() => setIsCreateOrderOpen(true)}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Create First Order
+                </button>
+              ) : (
+                <button
+                  onClick={handleResetFilters}
+                  className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                >
+                  Reset Filters
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="w-full">
