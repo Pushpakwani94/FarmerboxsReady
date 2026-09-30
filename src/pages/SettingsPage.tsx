@@ -102,11 +102,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab = 'Backup
 
   // User Management State (Legacy Table)
   const [usersList, setUsersList] = useState([
-    { id: 1, name: adminProfile.name || 'Super Admin', email: adminProfile.email || 'admin@farmerbox.com', role: 'Super Admin', status: 'Active' },
-    { id: 2, name: 'Sneha Patil', email: 'sneha@farmerbox.com', role: 'Admin', status: 'Active' },
-    { id: 3, name: 'Amit Shinde', email: 'amit@farmerbox.com', role: 'Operations', status: 'Active' },
-    { id: 4, name: 'Priya Deshmukh', email: 'priya@farmerbox.com', role: 'Finance', status: 'Active' },
-    { id: 5, name: 'Rohan More', email: 'rohan@farmerbox.com', role: 'Support', status: 'Inactive' }
+    { id: 1, name: adminProfile.name || 'Pushpak Wani', email: adminProfile.email || 'admin@farmerbox.com', role: 'Super Admin', status: 'Active' },
+    { id: 2, name: 'Nitin', email: 'nitin@farmerbox.com', role: 'Operations Sub-Admin', status: 'Active' },
+    { id: 3, name: 'Pavan Patil', email: 'pavan@farmerbox.com', role: 'Zone Admin', status: 'Active' },
+    { id: 4, name: 'Sneha Patil', email: 'sneha@farmerbox.com', role: 'Admin', status: 'Active' },
+    { id: 5, name: 'Amit Shinde', email: 'amit@farmerbox.com', role: 'Operations', status: 'Active' },
+    { id: 6, name: 'Priya Deshmukh', email: 'priya@farmerbox.com', role: 'Finance', status: 'Active' }
   ]);
 
   // Super Admin Access Requests State

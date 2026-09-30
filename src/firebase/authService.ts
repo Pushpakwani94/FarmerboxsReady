@@ -579,6 +579,7 @@ export class AuthService {
         if (!input) return 'Admin User';
         const lower = input.toLowerCase();
         if (lower.includes('pushpak')) return 'Pushpak Wani';
+        if (lower.includes('nitin')) return 'Nitin';
         if (lower.includes('pavan') || lower.includes('pawan')) {
           if (lower.includes('patil')) return 'Pavan Patil';
           return 'Pavan';
@@ -601,6 +602,10 @@ export class AuthService {
       if (!uid) {
         if ((isSuperAdminEmail || isSuperAdminPhone || cleanId.toLowerCase().includes('pushpak')) && (isAuthorizedSuperAdminPass || cleanPassword.length >= 3)) {
           uid = 'admin_super_pushpak';
+        } else if (cleanId.toLowerCase().includes('nitin')) {
+          uid = 'admin_sub_nitin';
+        } else if (cleanId.toLowerCase().includes('pavan') || cleanId.toLowerCase().includes('pawan')) {
+          uid = 'admin_sub_pavan';
         } else if (approvedUserRequest) {
           uid = `admin_${approvedUserRequest.id}`;
         } else {
@@ -978,13 +983,26 @@ export class AuthService {
     }
     const initialSubAdmins: SubAdminAccount[] = [
       {
+        id: 'SUB-100',
+        name: 'Nitin',
+        email: 'nitin@farmerbox.com',
+        phone: '9822101010',
+        role: 'Operations Sub-Admin',
+        assignedZone: 'All Zones (HQ)',
+        permissions: ['orders', 'drivers', 'hotels', 'joiners', 'inventory', 'commission', 'payments', 'reports', 'zones', 'notifications', 'settings'],
+        password: 'Admin@123',
+        status: 'Active',
+        createdAt: '2026-09-01T10:00:00.000Z',
+        createdBy: 'Pushpak Wani (Super Admin)'
+      },
+      {
         id: 'SUB-101',
-        name: 'Santosh Gaikwad',
-        email: 'kharadi.admin@farmerbox.com',
+        name: 'Pavan Patil',
+        email: 'pavan@farmerbox.com',
         phone: '9822101011',
         role: 'Zone Admin',
-        assignedZone: 'Kharadi Zone',
-        permissions: ['orders', 'drivers', 'hotels', 'joiners', 'inventory'],
+        assignedZone: 'All Zones (HQ)',
+        permissions: ['orders', 'drivers', 'hotels', 'joiners', 'inventory', 'commission', 'payments', 'reports', 'zones', 'notifications', 'settings'],
         password: 'Admin@123',
         status: 'Active',
         createdAt: '2026-09-01T10:00:00.000Z',
@@ -992,15 +1010,15 @@ export class AuthService {
       },
       {
         id: 'SUB-102',
-        name: 'Nilesh Patil',
-        email: 'viman.admin@farmerbox.com',
+        name: 'Santosh Gaikwad',
+        email: 'santosh@farmerbox.com',
         phone: '9822101012',
         role: 'Zone Admin',
-        assignedZone: 'Viman Nagar Zone',
-        permissions: ['orders', 'drivers', 'hotels', 'joiners'],
+        assignedZone: 'All Zones (HQ)',
+        permissions: ['orders', 'drivers', 'hotels', 'joiners', 'inventory', 'commission', 'payments', 'reports', 'zones', 'notifications', 'settings'],
         password: 'Admin@123',
         status: 'Active',
-        createdAt: '2026-09-05T14:30:00.000Z',
+        createdAt: '2026-09-01T10:00:00.000Z',
         createdBy: 'Pushpak Wani (Super Admin)'
       },
       {
@@ -1010,7 +1028,7 @@ export class AuthService {
         phone: '9822101013',
         role: 'Finance Sub-Admin',
         assignedZone: 'All Zones (HQ)',
-        permissions: ['commission', 'payments', 'reports'],
+        permissions: ['orders', 'drivers', 'hotels', 'joiners', 'inventory', 'commission', 'payments', 'reports', 'zones', 'notifications', 'settings'],
         password: 'Admin@123',
         status: 'Active',
         createdAt: '2026-09-10T11:20:00.000Z',
