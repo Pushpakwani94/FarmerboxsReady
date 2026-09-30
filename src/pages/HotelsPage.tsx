@@ -27,6 +27,7 @@ import {
 export const HotelsPage: React.FC = () => {
   const {
     hotels,
+    orders,
     selectedHotel,
     setSelectedHotel,
     setIsAddHotelOpen,
@@ -87,11 +88,33 @@ export const HotelsPage: React.FC = () => {
       ? selectedHotel
       : filteredHotels[0] || hotels[0] || null;
 
-  const totalHotelsCount = hotels.length;
-  const activeHotelsCount = hotels.filter(h => (h.status || 'Active') === 'Active').length;
-  const inactiveHotelsCount = hotels.filter(h => h.status === 'Inactive').length;
-  const zonesCount = zones.length;
-  const joinersCount = joiners.length;
+  const getHotelStats = (h: Hotel | null) => {
+    if (!h) return { ordersCount: 0, totalSpent: 0, hotelOrders: [] as typeof orders };
+    const hId = String(h.id || '');
+    const hHotelId = String(h.hotelId || '');
+    const hName = (h.name || '').trim().toLowerCase();
+
+    const hotelOrders = orders.filter(o => {
+      const oHotelId = String(o.hotelId || '');
+      const oHotelName = (o.hotelName || '').trim().toLowerCase();
+      return (
+        (hId && oHotelId === hId) ||
+        (hHotelId && oHotelId === hHotelId) ||
+        (hName && oHotelName === hName) ||
+        (hName && oHotelName.includes(hName)) ||
+        (hName.length > 3 && hName.includes(oHotelName))
+      );
+    });
+
+    const ordersCount = hotelOrders.length > 0 ? hotelOrders.length : Number(h.totalOrders ?? h.orders ?? 0);
+    const totalSpent = hotelOrders.length > 0
+      ? hotelOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
+      : Number(h.totalSpent ?? 0);
+
+    return { ordersCount, totalSpent, hotelOrders };
+  };
+
+  const activeHotelStats = getHotelStats(activeHotel);
 
   const handleOpenEdit = (h: Hotel) => {
     setEditingHotel(h);
@@ -362,7 +385,7 @@ export const HotelsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">
-                        {h.totalOrders ?? 0}
+                        {getHotelStats(h).ordersCount}
                       </td>
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
@@ -551,11 +574,11 @@ export const HotelsPage: React.FC = () => {
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div className="bg-sky-50 p-2.5 rounded-lg border border-sky-100">
                   <p className="text-[10px] text-slate-400 font-medium">Total Orders</p>
-                  <p className="font-bold text-sky-900 text-base">{activeHotel.totalOrders ?? 0}</p>
+                  <p className="font-bold text-sky-900 text-base">{activeHotelStats.ordersCount}</p>
                 </div>
                 <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-100">
                   <p className="text-[10px] text-slate-400 font-medium">Order Value</p>
-                  <p className="font-bold text-purple-900 text-base">₹{(activeHotel.totalSpent ?? 0).toLocaleString('en-IN')}</p>
+                  <p className="font-bold text-purple-900 text-base">₹{activeHotelStats.totalSpent.toLocaleString('en-IN')}</p>
                 </div>
                 <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                   <p className="text-[10px] text-slate-400 font-medium">Rating</p>
@@ -624,36 +647,48 @@ export const HotelsPage: React.FC = () => {
 
               {selectedTab === 'Order History' && (
                 <div className="overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400 font-semibold">
-                        <th className="py-2 px-2">Order ID</th>
-                        <th className="py-2 px-2">Date</th>
-                        <th className="py-2 px-2 text-right">Amount</th>
-                        <th className="py-2 px-2 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(activeHotel.orderHistory || [
-                        { id: 'FB1001', date: '11 Sep 2026', amount: 2500, status: 'Delivered' },
-                        { id: 'FB1002', date: '10 Sep 2026', amount: 1800, status: 'Delivered' },
-                        { id: 'FB1003', date: '09 Sep 2026', amount: 3200, status: 'Out for Delivery' }
-                      ]).map(ord => (
-                        <tr key={ord.id} className="hover:bg-slate-100/60 transition-colors">
-                          <td className="py-2 px-2 font-bold text-slate-800">{ord.id}</td>
-                          <td className="py-2 px-2 text-slate-500">{ord.date}</td>
-                          <td className="py-2 px-2 text-right font-bold text-slate-900">₹{ord.amount.toLocaleString('en-IN')}</td>
-                          <td className="py-2 px-2 text-center">
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                              ord.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
-                            }`}>
-                              {ord.status}
-                            </span>
-                          </td>
+                  {activeHotelStats.hotelOrders.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs space-y-2">
+                      <p>No orders placed by this hotel partner yet.</p>
+                      <button
+                        onClick={() => setActiveTab('Orders')}
+                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg shadow-2xs inline-flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Go to Orders Dispatch
+                      </button>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-400 font-semibold">
+                          <th className="py-2 px-2">Order ID</th>
+                          <th className="py-2 px-2">Date</th>
+                          <th className="py-2 px-2 text-right">Amount</th>
+                          <th className="py-2 px-2 text-center">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {activeHotelStats.hotelOrders.map(ord => (
+                          <tr key={ord.id} className="hover:bg-slate-100/60 transition-colors">
+                            <td className="py-2 px-2 font-bold text-slate-800">{ord.id}</td>
+                            <td className="py-2 px-2 text-slate-500">{ord.date}</td>
+                            <td className="py-2 px-2 text-right font-bold text-slate-900">₹{(Number(ord.amount) || 0).toLocaleString('en-IN')}</td>
+                            <td className="py-2 px-2 text-center">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                ord.status === 'Delivered'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : ord.status === 'Pending'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-sky-100 text-sky-800'
+                              }`}>
+                                {ord.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
 
