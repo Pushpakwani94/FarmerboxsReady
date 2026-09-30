@@ -145,7 +145,8 @@ export interface Driver {
 }
 
 export interface Hotel {
-  id: number;
+  id: number | string;
+  hotelId?: string | number;
   name: string;
   ownerName: string;
   contactPerson?: string;

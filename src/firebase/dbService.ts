@@ -157,7 +157,8 @@ export const saveRecord = async <T extends { id?: string | number }>(
 };
 
 /**
- * Delete a document directly from Cloud Firestore.
+ * Delete a document directly and thoroughly from Cloud Firestore.
+ * Searches and removes by direct doc ID, alternate ID variants, and field queries.
  */
 export const deleteRecord = async (
   collectionName: CollectionName,
@@ -169,21 +170,25 @@ export const deleteRecord = async (
     }
 
     const docId = String(id);
-    const docRef = doc(db, collectionName, docId);
-    try {
-      await deleteDoc(docRef);
-    } catch (directErr) {
-      console.warn(`Direct deleteDoc attempt on '${collectionName}' (${docId}):`, directErr);
-    }
-
-    // Try alternate ID format (with / without '#' prefix)
     const possibleDocIds = new Set<string>();
+    possibleDocIds.add(docId);
+
+    // Alternate ID formats
     if (docId.startsWith('#')) {
       possibleDocIds.add(docId.slice(1));
     } else {
       possibleDocIds.add(`#${docId}`);
     }
 
+    const cleanDigits = docId.replace(/\D/g, '');
+    if (cleanDigits && cleanDigits.length >= 6) {
+      possibleDocIds.add(cleanDigits);
+      possibleDocIds.add(`usr_${cleanDigits}`);
+      possibleDocIds.add(`HT_${cleanDigits}`);
+      possibleDocIds.add(`HT${cleanDigits}`);
+    }
+
+    // Direct deletion attempts across possible document IDs
     for (const altId of possibleDocIds) {
       try {
         await deleteDoc(doc(db, collectionName, altId));
@@ -192,27 +197,94 @@ export const deleteRecord = async (
       }
     }
 
-    // Comprehensive query fallback: Find and delete any document where field 'id' matches
+    // If deleting from 'joiners', also delete corresponding record from 'users'
+    if (collectionName === 'joiners') {
+      for (const altId of possibleDocIds) {
+        try {
+          await deleteDoc(doc(db, 'users', altId));
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // Comprehensive query search to delete any document where id, orderId, hotelId, uid, or phone matches
     try {
       const colRef = collection(db, collectionName);
-      const queriesToTry: QueryConstraint[] = [
+      const queryConstraints: QueryConstraint[] = [
         where('id', '==', id)
       ];
+
       if (typeof id === 'number') {
-        queriesToTry.push(where('id', '==', String(id)));
+        queryConstraints.push(where('id', '==', String(id)));
       } else if (typeof id === 'string' && /^\d+$/.test(id)) {
-        queriesToTry.push(where('id', '==', Number(id)));
+        queryConstraints.push(where('id', '==', Number(id)));
       }
 
-      for (const qConstraint of queriesToTry) {
-        const q = query(colRef, qConstraint);
-        const querySnap = await getDocs(q);
-        if (!querySnap.empty) {
-          const batch = writeBatch(db);
-          querySnap.forEach(snap => {
-            batch.delete(snap.ref);
-          });
-          await batch.commit();
+      if (collectionName === 'orders') {
+        queryConstraints.push(where('orderId', '==', id));
+        if (docId.startsWith('#')) {
+          queryConstraints.push(where('orderId', '==', docId.slice(1)));
+          queryConstraints.push(where('id', '==', docId.slice(1)));
+        } else {
+          queryConstraints.push(where('orderId', '==', `#${docId}`));
+          queryConstraints.push(where('id', '==', `#${docId}`));
+        }
+      }
+
+      if (collectionName === 'hotels') {
+        queryConstraints.push(where('hotelId', '==', id));
+        queryConstraints.push(where('hotelId', '==', String(id)));
+      }
+
+      if (collectionName === 'joiners' || collectionName === 'users') {
+        queryConstraints.push(where('uid', '==', id));
+        queryConstraints.push(where('uid', '==', String(id)));
+        if (cleanDigits && cleanDigits.length >= 6) {
+          queryConstraints.push(where('mobile', '==', cleanDigits));
+          queryConstraints.push(where('phone', '==', cleanDigits));
+          queryConstraints.push(where('mobile', '==', `+91${cleanDigits}`));
+          queryConstraints.push(where('phone', '==', `+91${cleanDigits}`));
+        }
+      }
+
+      for (const qConstraint of queryConstraints) {
+        try {
+          const q = query(colRef, qConstraint);
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            const batch = writeBatch(db);
+            querySnap.forEach(snap => {
+              batch.delete(snap.ref);
+            });
+            await batch.commit();
+          }
+        } catch {
+          // continue to next query
+        }
+      }
+
+      // If joiners, also query and delete from 'users' collection
+      if (collectionName === 'joiners') {
+        try {
+          const usersColRef = collection(db, 'users');
+          for (const qConstraint of queryConstraints) {
+            try {
+              const q = query(usersColRef, qConstraint);
+              const querySnap = await getDocs(q);
+              if (!querySnap.empty) {
+                const batch = writeBatch(db);
+                querySnap.forEach(snap => {
+                  batch.delete(snap.ref);
+                });
+                await batch.commit();
+              }
+            } catch {
+              // continue
+            }
+          }
+        } catch {
+          // ignore
         }
       }
     } catch (queryErr) {

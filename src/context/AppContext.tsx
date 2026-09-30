@@ -131,8 +131,8 @@ interface AppContextType {
   acceptOrder: (orderId: string, driverName?: string) => void;
   assignDriverToOrder: (orderId: string, driverName: string, driverPhone?: string, driverId?: string | number, newStatus?: OrderStatus) => void;
   addZone: (name: string, area?: string, status?: 'Active' | 'Inactive') => void;
-  updateZone: (zoneId: number, data: Partial<Zone>) => void;
-  deleteZone: (zoneId: number) => void;
+  updateZone: (zoneId: number | string, data: Partial<Zone>) => void;
+  deleteZone: (zoneId: number | string) => void;
   addJoiner: (name: string, mobile: string, zone: string, email?: string, status?: 'Active' | 'Inactive') => void;
   updateJoiner: (joinerId: number | string, data: Partial<Joiner>) => void;
   deleteJoiner: (joinerId: number | string) => void;
@@ -143,14 +143,14 @@ interface AppContextType {
     zone?: string,
     joiner?: string
   ) => void;
-  updateHotel: (hotelId: number, data: Partial<Hotel>) => void;
-  deleteHotel: (hotelId: number) => void;
+  updateHotel: (hotelId: number | string, data: Partial<Hotel>) => void;
+  deleteHotel: (hotelId: number | string) => void;
   addDriver: (driver: Partial<Driver>) => void;
-  updateDriver: (driverId: number, data: Partial<Driver>) => void;
-  deleteDriver: (driverId: number) => void;
+  updateDriver: (driverId: number | string, data: Partial<Driver>) => void;
+  deleteDriver: (driverId: number | string) => void;
   addProduct: (product: Partial<Product>) => void;
-  updateProduct: (productId: number, data: Partial<Product>) => void;
-  deleteProduct: (productId: number) => void;
+  updateProduct: (productId: number | string, data: Partial<Product>) => void;
+  deleteProduct: (productId: number | string) => void;
   addOrder: (order: Partial<Order>) => void;
   deleteOrder: (orderId: string) => void;
   addPayment: (payment: Partial<PaymentTransaction>) => void;
@@ -913,22 +913,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const updateZone = async (zoneId: number, data: Partial<Zone>) => {
-    const existing = zones.find(z => z.id === zoneId);
+  const updateZone = async (zoneId: number | string, data: Partial<Zone>) => {
+    const existing = zones.find(z => String(z.id) === String(zoneId));
     if (existing) {
       const updated = { ...existing, ...data };
-      await saveRecord('zones', updated);
+      await saveRecord('zones', updated, String(zoneId));
     }
-    setZones(prev => prev.map(z => z.id === zoneId ? { ...z, ...data } : z));
-    if (selectedZone && selectedZone.id === zoneId) {
+    setZones(prev => prev.map(z => String(z.id) === String(zoneId) ? { ...z, ...data } : z));
+    if (selectedZone && String(selectedZone.id) === String(zoneId)) {
       setSelectedZone(prev => (prev ? { ...prev, ...data } : null));
     }
   };
 
-  const deleteZone = async (zoneId: number) => {
-    setZones(prev => prev.filter(z => z.id !== zoneId));
-    if (selectedZone && selectedZone.id === zoneId) {
-      const remaining = zones.filter(z => z.id !== zoneId);
+  const deleteZone = async (zoneId: number | string) => {
+    setZones(prev => prev.filter(z => String(z.id) !== String(zoneId)));
+    if (selectedZone && String(selectedZone.id) === String(zoneId)) {
+      const remaining = zones.filter(z => String(z.id) !== String(zoneId));
       setSelectedZone(remaining.length > 0 ? remaining[0] : null);
     }
     try {
@@ -1013,15 +1013,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteJoiner = async (joinerId: number | string) => {
+    const target = joiners.find(j => String(j.id) === String(joinerId) || String(j.mobile || '').replace(/\D/g, '') === String(joinerId).replace(/\D/g, ''));
+
     // Immediate optimistic update
-    setJoiners(prev => prev.filter(j => String(j.id) !== String(joinerId)));
-    if (selectedJoiner && String(selectedJoiner.id) === String(joinerId)) {
-      const remaining = joiners.filter(j => String(j.id) !== String(joinerId));
+    setJoiners(prev => prev.filter(j => String(j.id) !== String(joinerId) && String(j.mobile || '').replace(/\D/g, '') !== String(joinerId).replace(/\D/g, '')));
+    if (selectedJoiner && (String(selectedJoiner.id) === String(joinerId) || String(selectedJoiner.mobile || '').replace(/\D/g, '') === String(joinerId).replace(/\D/g, ''))) {
+      const remaining = joiners.filter(j => String(j.id) !== String(joinerId) && String(j.mobile || '').replace(/\D/g, '') !== String(joinerId).replace(/\D/g, ''));
       setSelectedJoiner(remaining.length > 0 ? remaining[0] : null);
     }
 
     try {
       await deleteRecord('joiners', joinerId);
+      await deleteRecord('users', joinerId);
+      if (target) {
+        if (target.id && String(target.id) !== String(joinerId)) {
+          await deleteRecord('joiners', target.id);
+          await deleteRecord('users', target.id);
+        }
+        if (target.mobile) {
+          await deleteRecord('joiners', target.mobile);
+          await deleteRecord('users', target.mobile);
+        }
+      }
     } catch (e) {
       console.warn('Could not delete joiner from firestore:', e);
     }
@@ -1093,26 +1106,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const updateHotel = async (hotelId: number, data: Partial<Hotel>) => {
-    const existing = hotels.find(h => h.id === hotelId);
+  const updateHotel = async (hotelId: number | string, data: Partial<Hotel>) => {
+    const existing = hotels.find(h => String(h.id) === String(hotelId) || String(h.hotelId || '') === String(hotelId));
     if (existing) {
       const updated = { ...existing, ...data };
-      await saveRecord('hotels', updated);
+      await saveRecord('hotels', updated, String(existing.id || hotelId));
     }
-    setHotels(prev => prev.map(h => (h.id === hotelId ? { ...h, ...data } : h)));
-    if (selectedHotel && selectedHotel.id === hotelId) {
+    setHotels(prev => prev.map(h => (String(h.id) === String(hotelId) || String(h.hotelId || '') === String(hotelId)) ? { ...h, ...data } : h));
+    if (selectedHotel && (String(selectedHotel.id) === String(hotelId) || String(selectedHotel.hotelId || '') === String(hotelId))) {
       setSelectedHotel(prev => (prev ? { ...prev, ...data } : null));
     }
   };
 
   const deleteHotel = async (hotelId: number | string) => {
-    setHotels(prev => prev.filter(h => String(h.id) !== String(hotelId)));
-    if (selectedHotel && String(selectedHotel.id) === String(hotelId)) {
-      const remaining = hotels.filter(h => String(h.id) !== String(hotelId));
+    const target = hotels.find(h => String(h.id) === String(hotelId) || String(h.hotelId || '') === String(hotelId));
+    setHotels(prev => prev.filter(h => String(h.id) !== String(hotelId) && String(h.hotelId || '') !== String(hotelId)));
+    if (selectedHotel && (String(selectedHotel.id) === String(hotelId) || String(selectedHotel.hotelId || '') === String(hotelId))) {
+      const remaining = hotels.filter(h => String(h.id) !== String(hotelId) && String(h.hotelId || '') !== String(hotelId));
       setSelectedHotel(remaining.length > 0 ? remaining[0] : null);
     }
     try {
       await deleteRecord('hotels', hotelId);
+      if (target) {
+        if (target.id && String(target.id) !== String(hotelId)) {
+          await deleteRecord('hotels', target.id);
+        }
+        if (target.hotelId && String(target.hotelId) !== String(hotelId)) {
+          await deleteRecord('hotels', target.hotelId);
+        }
+      }
     } catch (e) {
       console.warn('Could not delete hotel from firestore:', e);
     }
@@ -1308,12 +1330,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteOrder = async (orderId: string) => {
+    const target = orders.find(o => String(o.id) === String(orderId) || String(o.orderId || '') === String(orderId));
     setOrders(prev => prev.filter(o => String(o.id) !== String(orderId) && String(o.orderId || '') !== String(orderId)));
     if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId || '') === String(orderId))) {
       setSelectedOrder(null);
     }
     try {
       await deleteRecord('orders', orderId);
+      if (target) {
+        if (target.id && String(target.id) !== String(orderId)) {
+          await deleteRecord('orders', target.id);
+        }
+        if (target.orderId && String(target.orderId) !== String(orderId)) {
+          await deleteRecord('orders', target.orderId);
+        }
+      }
     } catch (e) {
       console.warn('Could not delete order from firestore:', e);
     }
