@@ -281,16 +281,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSelectedZone(prev => prev ? (validZones.find(item => String(item.id) === String(prev.id)) || validZones[0] || null) : (validZones[0] || null));
     }, handleErr);
 
-    const unsubJoiners = subscribeToCollection<any>('joiners', (j) => {
-      const normalizedJoiners: Joiner[] = (j || []).map((item: any, idx: number) => ({
+    let rawJoiners: any[] = [];
+    let rawUsers: any[] = [];
+
+    const syncAndNormalizeJoiners = () => {
+      const joinersMap = new Map<string, any>();
+
+      // 1. Add records from 'joiners' collection
+      rawJoiners.forEach((item: any, idx: number) => {
+        const idKey = String(item.id || item.uid || item.mobile || item.phone || idx);
+        joinersMap.set(idKey, item);
+      });
+
+      // 2. Add or merge records from 'users' collection where role is joiner
+      rawUsers.forEach((u: any) => {
+        const roleLower = String(u.role || '').toLowerCase();
+        if (roleLower === 'joiner' || roleLower === 'hotel joiner' || roleLower.includes('joiner')) {
+          const idKey = String(u.uid || u.id || u.phone || u.mobile);
+          const cleanPhone = String(u.phone || u.mobile || u.phoneNumber || '').replace(/\D/g, '');
+          const existing = joinersMap.get(idKey) || (cleanPhone ? Array.from(joinersMap.values()).find(j => String(j.mobile || j.phone).replace(/\D/g, '') === cleanPhone) : null);
+          
+          joinersMap.set(idKey, {
+            ...(existing || {}),
+            ...u,
+            id: u.uid || u.id || existing?.id || `usr_${cleanPhone}`,
+            name: u.name || existing?.name || `Joiner ${cleanPhone.slice(-4)}`,
+            mobile: cleanPhone || existing?.mobile || '',
+            phone: cleanPhone || existing?.phone || '',
+            email: u.email || existing?.email || `${cleanPhone}@farmerbox.in`,
+            zone: (u.zone || existing?.zone || 'Kharadi').replace(' Zone', ''),
+            status: u.status || existing?.status || 'Active'
+          });
+        }
+      });
+
+      const normalizedJoiners: Joiner[] = Array.from(joinersMap.values()).map((item: any, idx: number) => ({
         ...item,
         id: item.id || `usr_${idx + 1}`,
         name: item.name || 'Joiner Partner',
         mobile: item.mobile || item.phone || '',
         phone: item.phone || item.mobile || '',
         email: item.email || `${(item.name || 'joiner').toLowerCase().replace(/\s+/g, '')}@farmerbox.in`,
-        zone: item.zone || 'Baner',
-        joinerCode: item.joinerCode || `JB${String(item.id || '').replace(/\D/g, '').slice(-4) || (1001 + idx)}`,
+        zone: (item.zone || 'Kharadi').replace(' Zone', ''),
+        joinerCode: item.joinerCode || `JN${String(item.id || item.mobile || '').replace(/\D/g, '').slice(-4) || (1001 + idx)}`,
         status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
         totalHotels: Number(item.totalHotels || item.hotelsCount || 0),
         totalOrders: Number(item.totalOrders || item.ordersCount || 0),
@@ -305,8 +338,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         accountNo: item.accountNo || '•••• •••• 4521',
         ifscCode: item.ifscCode || 'HDFC0001234'
       }));
+
       setJoiners(normalizedJoiners);
       setSelectedJoiner(prev => prev ? (normalizedJoiners.find(item => String(item.id) === String(prev.id)) || normalizedJoiners[0] || null) : (normalizedJoiners[0] || null));
+    };
+
+    const unsubJoiners = subscribeToCollection<any>('joiners', (j) => {
+      rawJoiners = j || [];
+      syncAndNormalizeJoiners();
+    }, handleErr);
+
+    const unsubUsers = subscribeToCollection<any>('users', (u) => {
+      rawUsers = u || [];
+      syncAndNormalizeJoiners();
     }, handleErr);
 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {

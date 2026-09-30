@@ -1137,17 +1137,57 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const verifyPhoneOtp = async (otp: string, phone: string, name?: string, zone?: string) => {
     const user = await authService.verifyPhoneOtp(otp, phone, name, zone);
+    const cleanPhone = (user.phone || phone).replace(/[^0-9]/g, '');
     const profile: JoinerUserProfile = {
       uid: user.uid,
-      name: user.name || 'Hotel Joiner',
+      name: user.name || name || `Joiner ${cleanPhone.slice(-4) || 'Partner'}`,
       role: 'Hotel Joiner',
       zone: user.zone || 'Kharadi Zone',
-      phone: user.phone || phone,
-      email: user.email || '',
+      phone: cleanPhone,
+      email: user.email || `${cleanPhone}@farmerbox.in`,
       avatar: user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
       totalHotels: 0,
       totalOrders: 0
     };
+
+    // Explicitly guarantee joiner is saved to Firestore 'joiners' collection
+    const joinerDoc: any = {
+      id: user.uid,
+      uid: user.uid,
+      name: profile.name,
+      mobile: cleanPhone,
+      phone: cleanPhone,
+      email: profile.email,
+      zone: profile.zone.replace(' Zone', ''),
+      status: 'Active',
+      joinerCode: `JN${cleanPhone.slice(-4) || user.uid.slice(-4).toUpperCase()}`,
+      totalHotels: 0,
+      totalOrders: 0,
+      totalEarnings: 0,
+      commissionEarned: 0,
+      walletBalance: 0,
+      paidAmount: 0,
+      pendingAmount: 0,
+      joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await saveRecord('joiners', joinerDoc, user.uid);
+
+    // Alert Admin Panel
+    saveRecord<any>('notifications', {
+      id: `notif_${Date.now()}_jn`,
+      title: 'New Hotel Joiner Joined! 👤',
+      message: `${profile.name} (${cleanPhone}) registered via Phone OTP in ${joinerDoc.zone} Zone`,
+      category: 'Joiners',
+      userType: 'Joiners',
+      time: 'Just now',
+      date: joinerDoc.joinedDate,
+      read: false,
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    });
+
     if (typeof window !== 'undefined') {
       localStorage.setItem(MOBILE_JOINER_SESSION_KEY, JSON.stringify(profile));
     }
@@ -1161,17 +1201,57 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const registerUser = async (data: { name: string; phone: string; email: string; zone: string; password?: string }) => {
     const user = await authService.registerJoiner(data);
+    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
     const profile: JoinerUserProfile = {
       uid: user.uid,
       name: user.name,
       role: 'Hotel Joiner',
       zone: user.zone,
-      phone: user.phone,
+      phone: cleanPhone,
       email: user.email,
       avatar: user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       totalHotels: 0,
       totalOrders: 0
     };
+
+    // Explicitly guarantee joiner is saved to Firestore 'joiners' collection
+    const joinerDoc: any = {
+      id: user.uid,
+      uid: user.uid,
+      name: data.name,
+      mobile: cleanPhone,
+      phone: cleanPhone,
+      email: data.email || user.email || `${cleanPhone}@farmerbox.in`,
+      zone: data.zone.replace(' Zone', ''),
+      status: 'Active',
+      joinerCode: `JN${cleanPhone.slice(-4) || user.uid.slice(-4).toUpperCase()}`,
+      totalHotels: 0,
+      totalOrders: 0,
+      totalEarnings: 0,
+      commissionEarned: 0,
+      walletBalance: 0,
+      paidAmount: 0,
+      pendingAmount: 0,
+      joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await saveRecord('joiners', joinerDoc, user.uid);
+
+    // Alert Admin Panel
+    saveRecord<any>('notifications', {
+      id: `notif_${Date.now()}_jn`,
+      title: 'New Hotel Joiner Registered! 👤',
+      message: `${data.name} (${cleanPhone}) registered in ${joinerDoc.zone} Zone`,
+      category: 'Joiners',
+      userType: 'Joiners',
+      time: 'Just now',
+      date: joinerDoc.joinedDate,
+      read: false,
+      status: 'Unread',
+      createdAt: new Date().toISOString()
+    });
+
     if (typeof window !== 'undefined') {
       localStorage.setItem(MOBILE_JOINER_SESSION_KEY, JSON.stringify(profile));
     }
