@@ -13,28 +13,35 @@ export interface FirebaseConfigParams {
   databaseURL?: string;
 }
 
+export const OFFICIAL_FIREBASE_CONFIG: FirebaseConfigParams = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDmzOxuFpTAhPFAb8OkiGIkE6jl-Fm5XME',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'newfarmerboxs.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'newfarmerboxs',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'newfarmerboxs.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '757397760439',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:757397760439:web:8e464e4a0465860693a032',
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || ''
+};
+
 // Read from import.meta.env (defined in .env) or localStorage
 const getSavedConfig = (): FirebaseConfigParams => {
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('farmerbox_firebase_config');
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.apiKey && (parsed.projectId === 'newfarmerboxs' || parsed.projectId)) {
+          return parsed;
+        } else {
+          localStorage.removeItem('farmerbox_firebase_config');
+        }
       }
     } catch (e) {
       console.warn('Error reading stored Firebase config', e);
     }
   }
 
-  return {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || ''
-  };
+  return OFFICIAL_FIREBASE_CONFIG;
 };
 
 export const currentFirebaseConfig = getSavedConfig();
