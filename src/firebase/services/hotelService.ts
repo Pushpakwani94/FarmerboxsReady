@@ -114,11 +114,17 @@ export const hotelService = {
             const hotelPhone = String(data.joinerPhone || data.phone || data.mobile || '').replace(/[^0-9]/g, '').slice(-10);
             const addedBy = String(data.addedBy || '');
 
+            const cleanPhone = phone.replace(/[^0-9]/g, '').slice(-10);
+            const cleanHotelPhone = hotelPhone.replace(/[^0-9]/g, '').slice(-10);
+            const cleanJoinedBy = joinedBy.replace(/[^0-9]/g, '').slice(-10);
+            const cleanJoinerId = joinerId.replace(/[^0-9]/g, '').slice(-10);
+
             const matchesUid = Boolean(
               uid && (
                 joinedBy === uid ||
                 joinerId === uid ||
-                (cleanUid && cleanUid.length >= 6 && (joinedBy.includes(cleanUid) || joinerId.includes(cleanUid)))
+                (cleanUid && cleanUid.length >= 6 && (joinedBy.includes(cleanUid) || joinerId.includes(cleanUid))) ||
+                (cleanPhone && cleanPhone.length >= 6 && (cleanJoinedBy === cleanPhone || cleanJoinerId === cleanPhone || joinedBy.includes(cleanPhone) || joinerId.includes(cleanPhone)))
               )
             );
             const matchesName = Boolean(
@@ -130,13 +136,16 @@ export const hotelService = {
               )
             );
             const matchesPhone = Boolean(
-              phone && phone.length >= 6 && hotelPhone && (hotelPhone === phone || hotelPhone.includes(phone) || phone.includes(hotelPhone))
+              cleanPhone && cleanPhone.length >= 6 && cleanHotelPhone && (cleanHotelPhone === cleanPhone || cleanHotelPhone.includes(cleanPhone) || cleanPhone.includes(cleanHotelPhone))
+            );
+            const matchesZone = Boolean(
+              zone && zone !== 'all' && zone !== 'all zones (hq)' && hotelZone && (hotelZone === zone || hotelZone.includes(zone) || zone.includes(hotelZone))
             );
             const matchesAdminZone = (addedBy === 'Admin' || joinedBy === 'Admin' || !joinedBy) &&
               (!zone || zone === 'all' || zone === 'all zones (hq)' || hotelZone === zone || hotelZone.includes(zone) || zone.includes(hotelZone) || assignedJoiner === 'admin' || assignedJoiner === 'all' || !hotelZone);
 
-            // Hotel matches if directly created by joiner, assigned by name/phone, or published by Admin in the joiner's zone
-            if (matchesUid || matchesName || matchesPhone || matchesAdminZone) {
+            // Hotel matches if directly created by joiner, assigned by name/phone, in zone, or published by Admin
+            if (matchesUid || matchesName || matchesPhone || matchesZone || matchesAdminZone) {
               const idVal = data.id !== undefined ? data.id : d.id;
               hotels.push({
                 ...data,

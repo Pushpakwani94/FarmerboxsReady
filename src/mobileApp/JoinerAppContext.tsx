@@ -190,6 +190,7 @@ const JoinerAppContext = createContext<JoinerAppContextType | undefined>(undefin
 
 const MOBILE_JOINER_SESSION_KEY = 'farmerbox_mobile_joiner_session';
 const MOBILE_ORDERS_STORAGE_KEY = 'farmerbox_mobile_orders';
+const MOBILE_HOTELS_STORAGE_KEY = 'farmerbox_mobile_hotels';
 const NOTIFICATIONS_READ_KEY = 'farmerbox_last_read_notifications';
 
 const getInitialOrders = (): MobileOrder[] => {
@@ -204,6 +205,23 @@ const getInitialOrders = (): MobileOrder[] => {
       }
     } catch (e) {
       console.warn('Could not read stored orders session:', e);
+    }
+  }
+  return [];
+};
+
+const getInitialHotels = (): MobileHotel[] => {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(MOBILE_HOTELS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read stored hotels session:', e);
     }
   }
   return [];
@@ -241,8 +259,11 @@ const initialNotificationsList: MobileNotification[] = [];
 
 export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [screenState, setScreenState] = useState<MobileScreen>('SPLASH');
-  const [hotels, setHotels] = useState<MobileHotel[]>([]);
-  const [selectedHotel, setSelectedHotel] = useState<MobileHotel | null>(null);
+  const [hotels, setHotels] = useState<MobileHotel[]>(() => getInitialHotels());
+  const [selectedHotel, setSelectedHotel] = useState<MobileHotel | null>(() => {
+    const init = getInitialHotels();
+    return init.length > 0 ? init[0] : null;
+  });
   const [products, setProducts] = useState<MobileProduct[]>(() =>
     initialProductsList.map((p) => ({
       id: p.id,
@@ -314,6 +335,31 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [userProfile, setUserProfile] = useState<JoinerUserProfile>(() =>
     getInitialJoinerProfile()
   );
+
+  // Sync state changes to localStorage so closing the app never wipes data
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(MOBILE_ORDERS_STORAGE_KEY, JSON.stringify(orders));
+      } catch (e) {}
+    }
+  }, [orders]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(MOBILE_HOTELS_STORAGE_KEY, JSON.stringify(hotels));
+      } catch (e) {}
+    }
+  }, [hotels]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userProfile.uid) {
+      try {
+        localStorage.setItem(MOBILE_JOINER_SESSION_KEY, JSON.stringify(userProfile));
+      } catch (e) {}
+    }
+  }, [userProfile]);
 
   // Strict Screen Navigation Guard
   const setCurrentScreen = (screen: MobileScreen) => {

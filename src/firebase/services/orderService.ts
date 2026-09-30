@@ -113,15 +113,20 @@ export const orderService = {
             const orderPhone = String(data.joinerPhone || data.phone || data.mobile || '').replace(/[^0-9]/g, '').slice(-10);
             const addedBy = String(data.addedBy || '');
 
+            const cleanPhone = phone.replace(/[^0-9]/g, '').slice(-10);
+            const cleanOrderPhone = orderPhone.replace(/[^0-9]/g, '').slice(-10);
+            const cleanJoinerId = joinerId.replace(/[^0-9]/g, '').slice(-10);
+
             const matchesUid = Boolean(
               uid && (
                 joinerId === uid ||
                 String(data.joinedBy || '') === uid ||
-                (cleanUid && cleanUid.length >= 6 && (joinerId.includes(cleanUid) || String(data.joinedBy || '').includes(cleanUid)))
+                (cleanUid && cleanUid.length >= 6 && (joinerId.includes(cleanUid) || String(data.joinedBy || '').includes(cleanUid))) ||
+                (cleanPhone && cleanPhone.length >= 6 && (cleanJoinerId === cleanPhone || joinerId.includes(cleanPhone) || String(data.joinedBy || '').includes(cleanPhone)))
               )
             );
             const matchesPhone = Boolean(
-              phone && phone.length >= 6 && orderPhone && (orderPhone === phone || orderPhone.includes(phone) || phone.includes(orderPhone))
+              cleanPhone && cleanPhone.length >= 6 && cleanOrderPhone && (cleanOrderPhone === cleanPhone || cleanOrderPhone.includes(cleanPhone) || cleanPhone.includes(cleanOrderPhone))
             );
             const matchesName = Boolean(
               name && name.length >= 2 && (
@@ -130,11 +135,14 @@ export const orderService = {
                 (orderJoiner.length >= 3 && name.includes(orderJoiner))
               )
             );
+            const matchesZone = Boolean(
+              zone && zone !== 'all' && zone !== 'all zones (hq)' && orderZone && (orderZone === zone || orderZone.includes(zone) || zone.includes(orderZone))
+            );
             const matchesAdminZone = (addedBy === 'Admin' || !joinerId || joinerId === 'Admin') &&
               (!zone || zone === 'all' || zone === 'all zones (hq)' || orderZone === zone || orderZone.includes(zone) || zone.includes(orderZone) || orderJoiner === 'admin' || orderJoiner === 'all' || !orderZone);
 
-            // Order matches if placed by joiner, assigned to joiner, or created/updated by Admin in the joiner's zone
-            if (matchesUid || matchesPhone || matchesName || matchesAdminZone) {
+            // Order matches if placed by joiner, assigned to joiner, or created/updated in the joiner's zone
+            if (matchesUid || matchesPhone || matchesName || matchesZone || matchesAdminZone) {
               orders.push({
                 ...data,
                 id: String(data.id || data.orderId || d.id),
