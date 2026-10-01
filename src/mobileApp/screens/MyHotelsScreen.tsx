@@ -22,7 +22,7 @@ import type { MobileHotel } from '../JoinerAppContext';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 
 export const MyHotelsScreen: React.FC = () => {
-  const { hotels, setCurrentScreen, setSelectedHotel, updateHotelStatus, updateHotel, deleteHotel, userProfile } = useJoinerApp();
+  const { hotels, orders, setCurrentScreen, setSelectedHotel, updateHotelStatus, updateHotel, deleteHotel, userProfile } = useJoinerApp();
   const [activeFilter, setActiveFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusChangeToast, setStatusChangeToast] = useState<{ hotelName: string; status: string } | null>(null);
@@ -241,6 +241,11 @@ export const MyHotelsScreen: React.FC = () => {
           ) : (
             filteredHotels.map(hotel => {
               const isActive = hotel.status === 'Active';
+              const hotelOrdersCount = orders.filter(o =>
+                (o.hotelId && (String(o.hotelId) === String(hotel.id) || String(o.hotelId) === String(hotel.hotelId))) ||
+                (o.hotelName && hotel.name && o.hotelName.trim().toLowerCase() === hotel.name.trim().toLowerCase())
+              ).length;
+              const displayOrdersCount = Math.max(hotel.orders || 0, hotelOrdersCount);
 
               return (
                 <div
@@ -284,7 +289,7 @@ export const MyHotelsScreen: React.FC = () => {
                           {hotel.zone} • {hotel.contactPerson || 'Manager'}
                         </p>
                         <p className="text-[10px] text-slate-600 font-semibold mt-0.5">
-                          Orders: <strong className="text-slate-900">{hotel.orders}</strong>
+                          Orders: <strong className="text-slate-900">{displayOrdersCount}</strong>
                         </p>
                       </div>
                     </div>

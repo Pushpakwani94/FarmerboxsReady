@@ -90,6 +90,8 @@ export interface MobileOrder {
   status: 'Pending' | 'Confirmed' | 'Delivered' | 'Out for Delivery' | 'Preparing' | 'Cancelled';
   orderStatus?: string;
   items: any[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MobileNotification {
@@ -515,9 +517,6 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
   // 2. User-Scoped Hotels and Orders Subscriptions — live sync with Admin updates
   useEffect(() => {
     if (!userProfile.uid) {
-      setHotels([]);
-      setSelectedHotel(null);
-      setOrders([]);
       return;
     }
 
@@ -547,11 +546,26 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
           assignedJoiner: item.assignedJoiner || item.joiner
         }));
 
-        setHotels(transformed);
+        setHotels(prevHotels => {
+          const map = new Map<string, MobileHotel>();
+          (prevHotels || []).forEach(item => {
+            if (item && (item.id || item.hotelId)) {
+              map.set(String(item.hotelId || item.id), item);
+            }
+          });
+          transformed.forEach(item => {
+            if (item && (item.id || item.hotelId)) {
+              map.set(String(item.hotelId || item.id), item);
+            }
+          });
+          const merged = Array.from(map.values());
+          return merged.length > 0 ? merged : transformed;
+        });
+
         setSelectedHotel(prev => {
           if (!prev && transformed.length > 0) return transformed[0];
           if (prev) {
-            const found = transformed.find(item => String(item.id) === String(prev.id));
+            const found = transformed.find(item => String(item.id) === String(prev.id) || String(item.hotelId) === String(prev.id));
             return found || (transformed.length > 0 ? transformed[0] : null);
           }
           return null;
@@ -592,7 +606,27 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
           orderStatus: o.orderStatus || o.status || 'Pending',
           items: o.items || []
         }));
-        setOrders(mapped);
+
+        setOrders(prevOrders => {
+          const map = new Map<string, MobileOrder>();
+          (prevOrders || []).forEach(o => {
+            if (o && (o.id || o.orderId)) {
+              map.set(String(o.orderId || o.id), o);
+            }
+          });
+          mapped.forEach(o => {
+            if (o && (o.id || o.orderId)) {
+              map.set(String(o.orderId || o.id), o);
+            }
+          });
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => {
+            const dateA = new Date(a.createdAt || a.date || 0).getTime();
+            const dateB = new Date(b.createdAt || b.date || 0).getTime();
+            return dateB - dateA;
+          });
+          return merged.length > 0 ? merged : mapped;
+        });
       },
       (error) => {
         console.error('Mobile orders Firestore error:', error);
@@ -1327,7 +1361,11 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const logoutUser = async () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(MOBILE_JOINER_SESSION_KEY);
+      try {
+        localStorage.removeItem(MOBILE_JOINER_SESSION_KEY);
+        localStorage.removeItem(MOBILE_ORDERS_STORAGE_KEY);
+        localStorage.removeItem(MOBILE_HOTELS_STORAGE_KEY);
+      } catch (e) {}
     }
     setUserProfile({
       uid: '',
