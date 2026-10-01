@@ -175,9 +175,9 @@ import { initialProductsList } from '../data/productsData';
 
 // One-time purge of legacy mock data from browser storage
 if (typeof window !== 'undefined') {
-  const CLEAN_MOCK_VERSION = 'farmerbox_cleaned_dummy_data_v2';
+  const CLEAN_MOCK_VERSION = 'farmerbox_cleaned_dummy_data_v3';
   if (localStorage.getItem(CLEAN_MOCK_VERSION) !== 'true') {
-    const keysToPurge = ['orders', 'joiners', 'drivers', 'hotels', 'payments', 'notifications'];
+    const keysToPurge = ['orders', 'hotels'];
     keysToPurge.forEach((k) => localStorage.removeItem(`farmerbox_${k}`));
     localStorage.setItem(CLEAN_MOCK_VERSION, 'true');
   }
@@ -215,11 +215,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
   // Primary application state — initialized from localStorage if available, otherwise starter records
-  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', initialOrders));
+  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', []));
   const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', initialZones));
   const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', initialJoiners));
   const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', initialDrivers));
-  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', initialHotels));
+  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', []));
   const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', initialProductsList));
   const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', initialPayments));
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', initialNotifications));
@@ -242,12 +242,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const unsubOrders = subscribeToCollection<any>('orders', (data) => {
       if (!data || data.length === 0) {
-        if (isFirebaseConfigured() && db && initialOrders.length > 0) {
-          initialOrders.forEach(ord => {
-            saveRecord('orders', ord, String(ord.id));
-          });
-        }
-        setOrders(initialOrders);
+        setOrders([]);
         return;
       }
 
@@ -386,12 +381,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<any>('hotels', (h) => {
-      const rawHotelsList = (h && h.length > 0) ? h : initialHotels;
-      if ((!h || h.length === 0) && isFirebaseConfigured() && db && initialHotels.length > 0) {
-        initialHotels.forEach(hotel => {
-          saveRecord('hotels', hotel, String(hotel.id));
-        });
-      }
+      const rawHotelsList = h || [];
       const normalizedHotels: Hotel[] = rawHotelsList.map((item: any, idx: number) => ({
         ...item,
         id: item.id || `HT${Date.now().toString().slice(-6)}_${idx}`,

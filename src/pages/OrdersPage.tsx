@@ -545,7 +545,8 @@ export const OrdersPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <img
                             src={ord.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'}
-                            alt={ord.hotelName}
+                            alt=""
+                            aria-hidden="true"
                             className="w-6 h-6 rounded-md object-cover border border-slate-200 shrink-0"
                           />
                           <span className="font-bold text-slate-800">{ord.hotelName}</span>

@@ -369,7 +369,8 @@ export const HotelsPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <img
                             src={h.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'}
-                            alt={h.name || 'Hotel'}
+                            alt=""
+                            aria-hidden="true"
                             className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100';
