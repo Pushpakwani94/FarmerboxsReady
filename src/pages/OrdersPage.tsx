@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { Order } from '../types';
 import { AssignOrderModal } from '../components/Modals/AssignOrderModal';
+import { resolveProductImage } from '../utils/productImages';
 
 export const OrdersPage: React.FC = () => {
   const {
@@ -978,51 +979,50 @@ export const OrdersPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {(activeOrder.items || [
-                    { id: 1, productName: 'Tomato', qty: 50, unit: 'KG', price: 40, total: 2000 },
-                    { id: 2, productName: 'Onion', qty: 20, unit: 'KG', price: 30, total: 600 },
-                    { id: 3, productName: 'Potato', qty: 30, unit: 'KG', price: 25, total: 750 },
-                    { id: 4, productName: 'Green Chili', qty: 10, unit: 'KG', price: 50, total: 500 }
-                  ]).map(item => {
-                    const n = (item.productName || '').toLowerCase();
-                    let itemImg = '/products/onion.jpg';
-                    if (n.includes('onion')) itemImg = '/products/onion.jpg';
-                    else if (n.includes('carrot') || n.includes('gajar')) itemImg = '/products/carrot.jpg';
-                    else if (n.includes('chili') || n.includes('chilli') || n.includes('mirch')) itemImg = '/products/greenchili.jpg';
-                    else if (n.includes('beetroot') || n.includes('chukandar')) itemImg = '/products/beetroot.jpg';
-                    else if (n.includes('ridge') || n.includes('turai') || n.includes('dodka')) itemImg = '/products/ridgegourd.jpg';
-                    else if (n.includes('cauliflower') || n.includes('gobi')) itemImg = '/products/cauliflower.jpg';
-                    else if (n.includes('brinjal') || n.includes('eggplant')) itemImg = '/products/brinjal.jpg';
-                    else if (n.includes('pumpkin') || n.includes('kaddu')) itemImg = '/products/pumpkin.jpg';
-                    else if (n.includes('methi') || n.includes('fenugreek')) itemImg = '/products/fenugreek.jpg';
-                    else if (n.includes('mint') || n.includes('pudina')) itemImg = '/products/mint.jpg';
-                    else if (n.includes('ginger') || n.includes('adrak')) itemImg = '/products/ginger.jpg';
-                    else if (n.includes('tomato')) itemImg = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=200';
-                    else if (n.includes('potato')) itemImg = 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=200';
+                  {(() => {
+                    const orderItemsList = (activeOrder.items && activeOrder.items.length > 0)
+                      ? activeOrder.items
+                      : [
+                          { id: 1, productName: 'Fresh Red Tomatoes (Grade A)', qty: 25, unit: 'KG', price: 40, total: 1000 },
+                          { id: 2, productName: 'Farm Fresh Onions (Nashik)', qty: 30, unit: 'KG', price: 35, total: 1050 },
+                          { id: 3, productName: 'Green Coriander & Herbs', qty: 15, unit: 'Bunch', price: 30, total: 450 }
+                        ];
 
-                    return (
-                      <tr key={item.id} className="hover:bg-slate-100/60 transition-colors">
-                        <td className="py-2.5 px-1 text-slate-400 font-mono text-[11px]">{item.id}</td>
-                        <td className="py-2.5 px-1">
-                          <div className="flex items-center gap-2.5">
-                            <img
-                              src={itemImg}
-                              alt={item.productName}
-                              className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
-                            />
-                            <div>
-                              <span className="font-bold text-slate-900 text-xs block">{item.productName}</span>
-                              <span className="text-[10px] text-slate-400">Fresh Produce</span>
+                    return orderItemsList.map((item: any, idx: number) => {
+                      const pName = item.productName || item.name || item.title || `Produce Item ${idx + 1}`;
+                      const pQty = Number(item.qty ?? item.quantity ?? 1);
+                      const pUnit = item.unit || 'KG';
+                      const pPrice = Number(item.price ?? 30);
+                      const pTotal = Number(item.total ?? (pQty * pPrice));
+                      const itemImg = item.image || resolveProductImage(pName, 'Vegetables');
+
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-slate-100/60 transition-colors">
+                          <td className="py-2.5 px-1 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="py-2.5 px-1">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={itemImg}
+                                alt={pName}
+                                className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=200';
+                                }}
+                              />
+                              <div>
+                                <span className="font-bold text-slate-900 text-xs block">{pName}</span>
+                                <span className="text-[10px] text-slate-400">Fresh Produce</span>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-1 text-center font-bold text-slate-800">{item.qty}</td>
-                        <td className="py-2.5 px-1 text-center text-slate-500 font-medium">{item.unit}</td>
-                        <td className="py-2.5 px-1 text-right text-slate-700 font-semibold">₹{item.price}</td>
-                        <td className="py-2.5 px-1 text-right font-bold text-slate-900">₹{item.total.toLocaleString('en-IN')}</td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className="py-2.5 px-1 text-center font-bold text-slate-800">{pQty}</td>
+                          <td className="py-2.5 px-1 text-center text-slate-500 font-medium">{pUnit}</td>
+                          <td className="py-2.5 px-1 text-right text-slate-700 font-semibold">₹{pPrice}</td>
+                          <td className="py-2.5 px-1 text-right font-bold text-slate-900">₹{pTotal.toLocaleString('en-IN')}</td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
 
@@ -1030,21 +1030,28 @@ export const OrdersPage: React.FC = () => {
               <div className="pt-2 border-t border-slate-100 text-xs space-y-1.5">
                 <div className="flex justify-between text-slate-500">
                   <span>Subtotal</span>
-                  <span className="font-semibold text-slate-700">₹{activeOrder.subtotal || 3850}</span>
+                  <span className="font-semibold text-slate-700">
+                    ₹{((activeOrder.items && activeOrder.items.length > 0)
+                      ? activeOrder.items.reduce((sum: number, it: any) => sum + Number(it.total ?? ((it.qty ?? it.quantity ?? 1) * (it.price ?? 0))), 0)
+                      : (activeOrder.subtotal || activeOrder.amount || 2500)
+                    ).toLocaleString('en-IN')}
+                  </span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Delivery Charge</span>
                   <span className="font-semibold text-slate-700">₹{activeOrder.deliveryCharge || 0}</span>
                 </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Discount</span>
-                  <span className="font-semibold text-rose-600">- ₹{activeOrder.discount || 350}</span>
-                </div>
+                {Boolean(activeOrder.discount && activeOrder.discount > 0) && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Discount</span>
+                    <span className="font-semibold text-rose-600">- ₹{activeOrder.discount}</span>
+                  </div>
+                )}
                 
                 {/* Total Amount Green Highlight */}
                 <div className="flex justify-between items-center bg-emerald-50 text-emerald-900 font-extrabold text-sm py-2 px-3 rounded-lg border border-emerald-100">
                   <span>Total Amount</span>
-                  <span className="text-base text-emerald-800">₹{activeOrder.amount.toLocaleString('en-IN')}</span>
+                  <span className="text-base text-emerald-800">₹{Number(activeOrder.totalAmount ?? activeOrder.amount ?? 0).toLocaleString('en-IN')}</span>
                 </div>
               </div>
             </div>

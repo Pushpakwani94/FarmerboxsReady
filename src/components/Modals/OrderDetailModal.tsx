@@ -2,6 +2,7 @@ import React from 'react';
 import { X, ShoppingBag, MapPin, User, Truck, Calendar, IndianRupee, CheckCircle2, Shield, Trash2, Sparkles, Gift } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { OrderStatus } from '../../types';
+import { resolveProductImage } from '../../utils/productImages';
 
 export const OrderDetailModal: React.FC = () => {
   const { selectedOrder, setSelectedOrder, updateOrderStatus, assignDriverToOrder, drivers, isOrderDetailModalOpen, setIsOrderDetailModalOpen, deleteOrder, confirmAction } = useApp();
@@ -167,6 +168,53 @@ export const OrderDetailModal: React.FC = () => {
                 Mark Delivered (+₹100)
               </button>
             )}
+          </div>
+
+          {/* Order Produce Items Table */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800 text-xs">Produce Items in Order</span>
+              <span className="text-emerald-700 font-bold text-[11px]">
+                Total: ₹{orderAmount.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
+              {((selectedOrder.items && selectedOrder.items.length > 0)
+                ? selectedOrder.items
+                : [
+                    { id: 1, productName: 'Fresh Red Tomatoes (Grade A)', qty: 25, unit: 'KG', price: 40, total: 1000 },
+                    { id: 2, productName: 'Farm Fresh Onions (Nashik)', qty: 30, unit: 'KG', price: 35, total: 1050 },
+                    { id: 3, productName: 'Green Coriander & Herbs', qty: 15, unit: 'Bunch', price: 30, total: 450 }
+                  ]
+              ).map((item: any, idx: number) => {
+                const pName = item.productName || item.name || item.title || `Item ${idx + 1}`;
+                const pQty = Number(item.qty ?? item.quantity ?? 1);
+                const pUnit = item.unit || 'KG';
+                const pPrice = Number(item.price ?? 30);
+                const pTotal = Number(item.total ?? (pQty * pPrice));
+                const itemImg = item.image || resolveProductImage(pName, 'Vegetables');
+
+                return (
+                  <div key={item.id || idx} className="p-2 flex items-center justify-between bg-white text-xs">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <img
+                        src={itemImg}
+                        alt={pName}
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=200';
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 truncate text-[11.5px]">{pName}</p>
+                        <p className="text-[10px] text-slate-500">₹{pPrice}/{pUnit} • Qty: {pQty} {pUnit}</p>
+                      </div>
+                    </div>
+                    <span className="font-bold text-slate-900 font-mono text-xs">₹{pTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-1">
