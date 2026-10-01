@@ -52,6 +52,7 @@ export const CartScreen: React.FC = () => {
 
     try {
       addOrder({
+        hotelId: currentHotel.id,
         hotelName: currentHotel.name,
         hotelZone: currentHotel.zone,
         date: deliveryDate,

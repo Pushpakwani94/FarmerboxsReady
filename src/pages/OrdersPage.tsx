@@ -35,6 +35,7 @@ export const OrdersPage: React.FC = () => {
     joiners,
     drivers,
     hotels,
+    products,
     setActiveTab,
     setSelectedHotel,
     isDatabaseConnected,
@@ -62,9 +63,16 @@ export const OrdersPage: React.FC = () => {
   const [assignModalOrderId, setAssignModalOrderId] = useState<string | undefined>(undefined);
 
   // New Order Form state
-  const [newHotelName, setNewHotelName] = useState(hotels[0]?.name || 'Hotel Spice Villa');
+  const [newHotelName, setNewHotelName] = useState(hotels[0]?.name || 'Hotel Maharaja Executive');
   const [newPaymentMode, setNewPaymentMode] = useState<'Online' | 'COD'>('Online');
-  const [newDriver, setNewDriver] = useState(drivers[0]?.name || 'Suresh');
+  const [newDriver, setNewDriver] = useState(drivers[0]?.name || 'Ramesh Pawar');
+  const defaultItems = [
+    { id: 1, productName: 'Fresh Potatoes (Jyoti Special)', qty: 40, unit: 'KG', price: 30, total: 1200 },
+    { id: 2, productName: 'Crisp Green Capsicum', qty: 20, unit: 'KG', price: 60, total: 1200 },
+    { id: 3, productName: 'Fresh Ginger & Garlic Paste Pack', qty: 10, unit: 'KG', price: 80, total: 800 }
+  ];
+  const [newOrderItems, setNewOrderItems] = useState(defaultItems);
+  const [selectedCatalogProduct, setSelectedCatalogProduct] = useState('');
 
   const filteredOrders = orders.filter(o => {
     const searchLower = searchTerm.trim().toLowerCase();
@@ -164,30 +172,88 @@ export const OrdersPage: React.FC = () => {
   const handleCreateOrderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const hotelObj = hotels.find(h => h.name.toLowerCase() === newHotelName.toLowerCase()) || hotels[0];
+    const assignedDriverObj = drivers.find(d => d.name.toLowerCase() === newDriver.toLowerCase()) || drivers[0];
+    const calculatedTotal = newOrderItems.reduce((sum, it) => sum + Number(it.qty * it.price), 0);
+    const finalAmount = calculatedTotal > 0 ? calculatedTotal : 3200;
+
+    const orderNum = 1000 + orders.length + 1;
+    const orderId = `#FB${orderNum}`;
+
     const newOrderRecord: Order = {
-      id: `FB${1000 + orders.length + 1}`,
-      hotelName: newHotelName || (hotelObj ? hotelObj.name : 'Hotel Guest'),
+      id: orderId,
+      orderId: orderId,
+      hotelId: hotelObj?.id || hotelObj?.hotelId || 'HT01',
+      hotelName: newHotelName || (hotelObj ? hotelObj.name : 'Hotel Maharaja Executive'),
       hotelImage: hotelObj?.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
       zone: hotelObj?.zone || 'Kharadi',
-      joiner: hotelObj?.joiner || 'Pushpak wani',
-      amount: 1250,
+      hotelZone: hotelObj?.zone || 'Kharadi',
+      joiner: hotelObj?.joiner || 'Rahul Patil',
+      joinerId: hotelObj?.joinerId || 'JN1001',
+      amount: finalAmount,
+      totalAmount: finalAmount,
+      subtotal: finalAmount,
+      deliveryCharge: 0,
       status: 'Pending',
+      orderStatus: 'Pending',
       date: 'Today',
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      timeSlot: '8 AM - 10 AM',
       paymentMode: newPaymentMode,
       paymentStatus: newPaymentMode === 'Online' ? 'Paid' : 'Pending',
-      driver: newDriver || (drivers[0] ? drivers[0].name : 'Assigned Driver'),
-      driverPhone: drivers[0]?.mobile || '9876543210',
+      driver: newDriver || (assignedDriverObj ? assignedDriverObj.name : 'Ramesh Pawar'),
+      driverPhone: assignedDriverObj?.mobile || '9876543210',
       commission: 100,
-      deliveryAddress: hotelObj?.address || 'Pune, Maharashtra',
-      items: [
-        { id: 1, productName: 'Fresh Tomato', qty: 20, unit: 'KG', price: 30, total: 600 },
-        { id: 2, productName: 'Red Onion', qty: 15, unit: 'KG', price: 35, total: 525 },
-        { id: 3, productName: 'Green Chilli', qty: 2.5, unit: 'KG', price: 50, total: 125 }
-      ]
+      deliveryAddress: hotelObj?.address || `${hotelObj?.zone || 'Kharadi'}, Pune`,
+      items: newOrderItems.map(it => ({
+        id: it.id,
+        productId: it.id,
+        productName: it.productName,
+        name: it.productName,
+        qty: Number(it.qty),
+        quantity: Number(it.qty),
+        unit: it.unit || 'KG',
+        price: Number(it.price),
+        total: Number(it.qty * it.price)
+      }))
     };
+
     addOrder(newOrderRecord);
+    setSelectedOrder(newOrderRecord);
     setIsCreateOrderOpen(false);
+  };
+
+  const handleAddItemToNewOrder = (productName: string, price: number, unit: string = 'KG') => {
+    setNewOrderItems(prev => [
+      ...prev,
+      {
+        id: Date.now(),
+        productName,
+        qty: 10,
+        unit,
+        price,
+        total: 10 * price
+      }
+    ]);
+  };
+
+  const handleRemoveItemFromNewOrder = (id: number) => {
+    setNewOrderItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleUpdateItemQty = (id: number, delta: number) => {
+    setNewOrderItems(prev =>
+      prev.map(item => {
+        if (item.id === id) {
+          const nextQty = Math.max(1, item.qty + delta);
+          return {
+            ...item,
+            qty: nextQty,
+            total: nextQty * item.price
+          };
+        }
+        return item;
+      })
+    );
   };
 
   const handleViewHotel = (hotelName: string) => {
@@ -1000,15 +1066,15 @@ export const OrdersPage: React.FC = () => {
       {/* Create Order Modal */}
       {isCreateOrderOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-slate-800">Create New Order</h3>
-                  <p className="text-xs text-slate-500">Generate fresh vegetable order for hotel</p>
+                  <h3 className="font-bold text-base text-slate-800">Create New Order</h3>
+                  <p className="text-[11px] text-slate-500">Generate fresh vegetable produce order for partner hotel</p>
                 </div>
               </div>
               <button
@@ -1019,38 +1085,38 @@ export const OrdersPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrderSubmit} className="mt-4 space-y-3 text-xs">
+            <form onSubmit={handleCreateOrderSubmit} className="mt-3 space-y-3 text-xs overflow-y-auto pr-1 flex-1">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Select Hotel Partner *</label>
                 <select
                   value={newHotelName}
                   onChange={e => setNewHotelName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-700"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
                 >
                   {hotels.map(h => (
-                    <option key={h.id} value={h.name}>{h.name} ({h.zone})</option>
+                    <option key={h.id} value={h.name}>{h.name} — {h.zone} ({h.joiner || 'Partner'})</option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Payment Mode</label>
                   <select
                     value={newPaymentMode}
                     onChange={e => setNewPaymentMode(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-700"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
                   >
-                    <option value="Online">Online (Razorpay)</option>
+                    <option value="Online">Online (Razorpay / UPI)</option>
                     <option value="COD">Cash on Delivery (COD)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Assign Driver</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Assign Delivery Driver</label>
                   <select
                     value={newDriver}
                     onChange={e => setNewDriver(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-700"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
                   >
                     {drivers.map(d => (
                       <option key={d.id} value={d.name}>{d.name} ({d.zone})</option>
@@ -1059,24 +1125,118 @@ export const OrdersPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-emerald-800 font-medium">
-                🥬 <strong>Fresh Stock Guarantee:</strong> Produce sourced directly from partnered farms at 04:00 AM daily.
+              {/* Order Produce Items Section */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span>Order Items</span>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      {newOrderItems.length} Products
+                    </span>
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700">
+                    Total: ₹{newOrderItems.reduce((s, i) => s + (i.qty * i.price), 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* Items List */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
+                  {newOrderItems.map(item => (
+                    <div key={item.id} className="p-2.5 flex items-center justify-between gap-2 bg-white">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 truncate text-xs">{item.productName}</p>
+                        <p className="text-[10.5px] text-slate-500">₹{item.price}/{item.unit} • Subtotal: <strong className="text-slate-800">₹{item.qty * item.price}</strong></p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemQty(item.id, -5)}
+                            className="px-2 py-0.5 text-slate-600 hover:text-emerald-700 font-bold cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="px-2 font-mono font-bold text-slate-800 text-[11px]">{item.qty} {item.unit}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemQty(item.id, 5)}
+                            className="px-2 py-0.5 text-slate-600 hover:text-emerald-700 font-bold cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                        {newOrderItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItemFromNewOrder(item.id)}
+                            className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick Add Product */}
+                <div className="flex items-center gap-2 pt-1">
+                  <select
+                    value={selectedCatalogProduct}
+                    onChange={e => setSelectedCatalogProduct(e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-emerald-600"
+                  >
+                    <option value="">+ Add from catalog...</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.name}>{p.name} (₹{p.price}/{p.unit || 'KG'})</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!selectedCatalogProduct) return;
+                      const foundProd = products.find(p => p.name === selectedCatalogProduct);
+                      if (foundProd) {
+                        const prodPrice = Number(foundProd.price || 30);
+                        handleAddItemToNewOrder(foundProd.name, prodPrice, foundProd.unit || 'KG');
+                        setSelectedCatalogProduct('');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold rounded-xl border border-slate-200 cursor-pointer transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateOrderOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-semibold shadow-xs cursor-pointer"
-                >
-                  Confirm Order
-                </button>
+              <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 text-emerald-800 text-[11px] font-medium flex items-center justify-between">
+                <span>🥬 <strong>4:00 AM Fresh Harvest Guarantee</strong></span>
+                <span className="font-bold">₹100 Joiner Bonus Eligible</span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                <div>
+                  <p className="text-[10.5px] text-slate-500">Order Total</p>
+                  <p className="text-base font-black text-emerald-800">
+                    ₹{newOrderItems.reduce((s, i) => s + (i.qty * i.price), 0).toLocaleString('en-IN')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateOrderOpen(false)}
+                    className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-xl font-bold shadow-xs cursor-pointer text-xs transition-all active:scale-[0.98]"
+                  >
+                    Create & Place Order
+                  </button>
+                </div>
               </div>
             </form>
           </div>

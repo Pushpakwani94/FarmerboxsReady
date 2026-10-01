@@ -23,11 +23,13 @@ export interface Order {
   hotelId?: string | number;
   date: string;
   time: string;
+  timeSlot?: string;
   hotelName: string;
   hotelImage?: string;
   hotelOwner?: string;
   hotelPhone?: string;
   zone: string;
+  hotelZone?: string;
   joiner: string;
   joinerId?: string | number;
   joinedBy?: string;
