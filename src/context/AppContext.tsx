@@ -240,46 +240,111 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setFirestoreError(err.message || 'Firestore connection error');
     };
 
-    const unsubOrders = subscribeToCollection<any>('orders', (data) => {
-      if (!data || data.length === 0) {
-        setOrders([]);
-        return;
+    const normalizeOrderRecord = (ord: any): Order => ({
+      ...ord,
+      id: String(ord.id || ord.orderId || `FB${Math.floor(1000 + Math.random() * 9000)}`),
+      orderId: String(ord.orderId || ord.id || ''),
+      hotelName: ord.hotelName || ord.customerName || (ord.deliveryAddress?.name ? `${ord.deliveryAddress.name} (Customer)` : 'Hotel Partner'),
+      hotelId: ord.hotelId || '',
+      hotelImage: ord.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
+      joiner: ord.joiner || ord.joinerName || ord.assignedJoiner || 'Direct Partner',
+      joinerId: ord.joinerId || ord.joinedBy || '',
+      zone: (ord.zone || ord.hotelZone || ord.deliveryAddress?.area || 'Kharadi').replace(' Zone', ''),
+      hotelZone: (ord.hotelZone || ord.zone || 'Kharadi').replace(' Zone', ''),
+      amount: Number(ord.amount || ord.totalAmount || ord.subtotal || 0),
+      totalAmount: Number(ord.totalAmount || ord.amount || ord.subtotal || 0),
+      subtotal: Number(ord.subtotal || ord.amount || ord.totalAmount || 0),
+      deliveryCharge: Number(ord.deliveryCharge || 0),
+      date: ord.date || ord.orderDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: ord.time || ord.timeSlot || '10:00 AM',
+      timeSlot: ord.timeSlot || '8 AM - 10 AM',
+      status: ord.status || ord.orderStatus || 'Pending',
+      orderStatus: ord.orderStatus || ord.status || 'Pending',
+      paymentMode: ord.paymentMode || ord.paymentMethod || 'Online',
+      paymentStatus: ord.paymentStatus || 'Pending',
+      driver: (ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' && ord.driver !== '—') ? ord.driver : 'Not Assigned',
+      driverPhone: ord.driverPhone || '',
+      commission: Number(ord.commission ?? 100),
+      walletCredited: Boolean(ord.walletCredited || (ord.status === 'Delivered' && ord.bonusStatus?.includes('Credited'))),
+      deliveryAddress: ord.deliveryAddress || `${ord.hotelZone || ord.zone || 'Kharadi'}, Pune`,
+      items: (ord.items && ord.items.length > 0)
+        ? ord.items.map((item: any, i: number) => ({
+            id: item.id || item.productId || i + 1,
+            productId: item.productId || item.id || i + 1,
+            productName: item.productName || item.name || 'Produce Item',
+            name: item.name || item.productName || 'Produce Item',
+            qty: Number(item.qty || item.quantity || (typeof item.qty === 'string' ? parseFloat(item.qty) : 1)),
+            quantity: Number(item.quantity || item.qty || 1),
+            unit: item.unit || 'KG',
+            price: Number(item.price || 0),
+            total: Number(item.total || ((item.price || 0) * (item.quantity || item.qty || 1)))
+          }))
+        : []
+    });
+
+    const getMergedLocalOrders = (remoteOrders: any[]): Order[] => {
+      const combined = new Map<string, any>();
+      (remoteOrders || []).forEach(o => {
+        if (o) {
+          const key = String(o.orderId || o.id || '');
+          if (key) combined.set(key, o);
+        }
+      });
+
+      if (typeof window !== 'undefined') {
+        try {
+          const mobOrdersRaw = localStorage.getItem('farmerbox_mobile_orders');
+          if (mobOrdersRaw) {
+            const parsed = JSON.parse(mobOrdersRaw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(mo => {
+                if (mo) {
+                  const key = String(mo.orderId || mo.id || '');
+                  if (key && !combined.has(key)) {
+                    combined.set(key, mo);
+                  }
+                }
+              });
+            }
+          }
+        } catch {}
       }
 
-      const normalizedOrders: Order[] = (data || []).map((ord: any) => ({
-        ...ord,
-        id: String(ord.id || ord.orderId || `FB${Math.floor(1000 + Math.random() * 9000)}`),
-        orderId: String(ord.orderId || ord.id || ''),
-        hotelName: ord.hotelName || ord.customerName || (ord.deliveryAddress?.name ? `${ord.deliveryAddress.name} (Customer)` : 'Hotel Partner'),
-        hotelId: ord.hotelId || '',
-        joiner: ord.joiner || ord.joinerName || ord.assignedJoiner || 'Direct Partner',
-        joinerId: ord.joinerId || ord.joinedBy || '',
-        zone: (ord.zone || ord.hotelZone || ord.deliveryAddress?.area || 'Kharadi').replace(' Zone', ''),
-        amount: Number(ord.amount || ord.totalAmount || ord.subtotal || 0),
-        totalAmount: Number(ord.totalAmount || ord.amount || ord.subtotal || 0),
-        date: ord.date || ord.orderDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        time: ord.time || ord.timeSlot || '10:00 AM',
-        status: ord.status || ord.orderStatus || 'Pending',
-        orderStatus: ord.orderStatus || ord.status || 'Pending',
-        paymentMode: ord.paymentMode || ord.paymentMethod || 'Online',
-        paymentStatus: ord.paymentStatus || 'Pending',
-        driver: (ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' && ord.driver !== '—') ? ord.driver : 'Not Assigned',
-        driverPhone: ord.driverPhone || '',
-        commission: Number(ord.commission ?? 100),
-        walletCredited: Boolean(ord.walletCredited || (ord.status === 'Delivered' && ord.bonusStatus?.includes('Credited'))),
-        items: (ord.items && ord.items.length > 0)
-          ? ord.items.map((item: any, i: number) => ({
-              id: item.id || item.productId || i + 1,
-              productName: item.productName || item.name || 'Produce Item',
-              qty: Number(item.qty || item.quantity || (typeof item.qty === 'string' ? parseFloat(item.qty) : 1)),
-              unit: item.unit || 'KG',
-              price: Number(item.price || 0),
-              total: Number(item.total || ((item.price || 0) * (item.quantity || item.qty || 1)))
-            }))
-          : []
-      }));
-      setOrders(normalizedOrders);
+      return Array.from(combined.values()).map(normalizeOrderRecord);
+    };
+
+    const unsubOrders = subscribeToCollection<any>('orders', (data) => {
+      const allOrders = getMergedLocalOrders(data || []);
+      setOrders(allOrders);
     }, handleErr);
+
+    // Listen for live mobile app order & hotel dispatch events in the current session
+    const handleOrderCreatedEvent = (e: any) => {
+      const newOrd = e?.detail;
+      if (newOrd) {
+        setOrders(prev => {
+          const key = String(newOrd.orderId || newOrd.id || '');
+          if (prev.some(o => String(o.orderId || o.id) === key)) return prev;
+          return [normalizeOrderRecord(newOrd), ...prev];
+        });
+      }
+    };
+
+    const handleHotelCreatedEvent = (e: any) => {
+      const newHotel = e?.detail;
+      if (newHotel) {
+        setHotels(prev => {
+          const key = String(newHotel.hotelId || newHotel.id || '');
+          if (prev.some(h => String(h.hotelId || h.id) === key)) return prev;
+          return [newHotel, ...prev];
+        });
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('farmerbox_order_created', handleOrderCreatedEvent);
+      window.addEventListener('farmerbox_hotel_created', handleHotelCreatedEvent);
+    }
 
     const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
       const validZones = (z && z.length > 0) ? z : initialZones;
@@ -381,7 +446,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<any>('hotels', (h) => {
-      const rawHotelsList = h || [];
+      const combinedHotels = new Map<string, any>();
+      (h || []).forEach(item => {
+        if (item) {
+          const key = String(item.hotelId || item.id || '');
+          if (key) combinedHotels.set(key, item);
+        }
+      });
+
+      if (typeof window !== 'undefined') {
+        try {
+          const mobHotelsRaw = localStorage.getItem('farmerbox_mobile_hotels');
+          if (mobHotelsRaw) {
+            const parsed = JSON.parse(mobHotelsRaw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(mh => {
+                if (mh) {
+                  const key = String(mh.hotelId || mh.id || '');
+                  if (key && !combinedHotels.has(key)) {
+                    combinedHotels.set(key, mh);
+                  }
+                }
+              });
+            }
+          }
+        } catch {}
+      }
+
+      const rawHotelsList = Array.from(combinedHotels.values());
       const normalizedHotels: Hotel[] = rawHotelsList.map((item: any, idx: number) => ({
         ...item,
         id: item.id || `HT${Date.now().toString().slice(-6)}_${idx}`,

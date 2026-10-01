@@ -378,6 +378,20 @@ export const OrdersPage: React.FC = () => {
             </select>
 
             <select
+              value={selectedJoinerFilter}
+              onChange={e => {
+                setSelectedJoinerFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+            >
+              <option value="All Joiners">All Joiners</option>
+              {joiners.map(j => (
+                <option key={j.id} value={j.name}>{j.name}</option>
+              ))}
+            </select>
+
+            <select
               value={statusFilter}
               onChange={e => {
                 setStatusFilter(e.target.value);

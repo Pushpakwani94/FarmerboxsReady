@@ -890,6 +890,10 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     setHotels(prev => [hotelToSave, ...prev]);
     setSelectedHotel(hotelToSave);
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('farmerbox_hotel_created', { detail: hotelToSave }));
+    }
+
     const updatedProfile = { ...userProfile, totalHotels: (userProfile.totalHotels || 0) + 1 };
     setUserProfile(updatedProfile);
 
@@ -1193,6 +1197,10 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     setOrders(prev => [newOrder, ...prev]);
     setLastPlacedOrder(newOrder);
     clearCart();
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('farmerbox_order_created', { detail: newOrder }));
+    }
 
     const updatedProfile = { ...userProfile, totalOrders: (userProfile.totalOrders || 0) + 1 };
     setUserProfile(updatedProfile);

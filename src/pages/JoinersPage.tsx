@@ -447,8 +447,33 @@ export const JoinersPage: React.FC = () => {
                       </td>
                       <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{j.mobile || '—'}</td>
                       <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">{j.zone || 'General'}</td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.ordersCount}</td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedJoiner(j);
+                            setIsHotelsListModalOpen(true);
+                          }}
+                          className="font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+                          title={`View hotels joined by ${j.name}`}
+                        >
+                          {stats.hotelsCount}
+                        </button>
+                      </td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTab('Orders');
+                          }}
+                          className="font-bold text-sky-700 hover:text-sky-900 hover:underline cursor-pointer"
+                          title={`View orders for ${j.name} in Orders tab`}
+                        >
+                          {stats.ordersCount}
+                        </button>
+                      </td>
                       <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.totalEarnings.toLocaleString('en-IN')}</td>
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
