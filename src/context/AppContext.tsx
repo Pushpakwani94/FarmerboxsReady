@@ -165,6 +165,7 @@ import {
   initialOrders,
   initialZones,
   initialJoiners,
+  initialDrivers,
   initialHotels,
   initialPayments,
   initialNotifications
@@ -376,12 +377,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {
       const validDrivers = (d && d.length > 0) ? d : initialDrivers;
       if ((!d || d.length === 0) && isFirebaseConfigured() && db && initialDrivers.length > 0) {
-        initialDrivers.forEach(drv => {
+        initialDrivers.forEach((drv: Driver) => {
           saveRecord('drivers', drv, String(drv.id));
         });
       }
       setDrivers(validDrivers);
-      setSelectedDriver(prev => prev ? (validDrivers.find(item => String(item.id) === String(prev.id)) || validDrivers[0] || null) : (validDrivers[0] || null));
+      setSelectedDriver(prev => prev ? (validDrivers.find((item: Driver) => String(item.id) === String(prev.id)) || validDrivers[0] || null) : (validDrivers[0] || null));
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<any>('hotels', (h) => {

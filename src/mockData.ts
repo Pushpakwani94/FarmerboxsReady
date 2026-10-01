@@ -41,6 +41,7 @@ export const initialJoiners: Joiner[] = [
     walletBalance: 2500,
     paidAmount: 1500,
     pendingAmount: 1000,
+    joinedDate: '15 Aug 2026',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
     upiId: 'rahulpatil@okaxis',
     bankName: 'HDFC Bank',
@@ -63,6 +64,7 @@ export const initialJoiners: Joiner[] = [
     walletBalance: 800,
     paidAmount: 500,
     pendingAmount: 300,
+    joinedDate: '20 Aug 2026',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
     upiId: 'amitshinde@okicici',
     bankName: 'ICICI Bank',
@@ -85,6 +87,7 @@ export const initialJoiners: Joiner[] = [
     walletBalance: 1600,
     paidAmount: 1000,
     pendingAmount: 600,
+    joinedDate: '01 Sep 2026',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
     upiId: 'vikasjadhav@oksbi',
     bankName: 'SBI',
@@ -100,9 +103,11 @@ export const initialDrivers: Driver[] = [
     phone: '9876543210',
     mobile: '9876543210',
     zone: 'Kharadi',
+    vehicleNo: 'MH-12-FB-1001',
     vehicleNumber: 'MH-12-FB-1001',
     vehicleType: 'Tata Ace (Chota Hathi)',
     status: 'Active',
+    totalDeliveries: 42,
     assignedOrdersCount: 2,
     rating: 4.9,
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'
@@ -113,9 +118,11 @@ export const initialDrivers: Driver[] = [
     phone: '9876543211',
     mobile: '9876543211',
     zone: 'Viman Nagar',
+    vehicleNo: 'MH-12-FB-1002',
     vehicleNumber: 'MH-12-FB-1002',
     vehicleType: 'Mahindra Bolero Maxi Truck',
     status: 'Active',
+    totalDeliveries: 28,
     assignedOrdersCount: 1,
     rating: 4.8,
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100'
@@ -126,14 +133,18 @@ export const initialDrivers: Driver[] = [
     phone: '9876543212',
     mobile: '9876543212',
     zone: 'Hinjawadi',
+    vehicleNo: 'MH-12-FB-1003',
     vehicleNumber: 'MH-12-FB-1003',
     vehicleType: 'Electric E-Loader 3W',
     status: 'Active',
+    totalDeliveries: 15,
     assignedOrdersCount: 0,
     rating: 4.7,
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100'
   }
 ];
+
+export const initialDriversList = initialDrivers;
 
 export const initialHotels: Hotel[] = [
   {

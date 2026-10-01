@@ -104,6 +104,11 @@ export interface Joiner {
   joinedDate: string;
   addedBy?: string;
   createdBy?: string;
+  walletBalance?: number;
+  upiId?: string;
+  bankName?: string;
+  accountNo?: string;
+  ifscCode?: string;
   assignedHotelsList?: AssignedHotel[];
   performanceHistory?: { month: string; orders: number }[];
 }

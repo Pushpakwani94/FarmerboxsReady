@@ -116,6 +116,12 @@ export const HotelsPage: React.FC = () => {
 
   const activeHotelStats = getHotelStats(activeHotel);
 
+  const totalHotelsCount = hotels.length;
+  const activeHotelsCount = hotels.filter(h => (h.status || 'Active') === 'Active').length;
+  const inactiveHotelsCount = hotels.filter(h => h.status === 'Inactive').length;
+  const zonesCount = zones.length;
+  const joinersCount = joiners.length;
+
   const handleOpenEdit = (h: Hotel) => {
     setEditingHotel(h);
     setEditForm({
