@@ -38,7 +38,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
   // Build the direct APK and iOS URLs using the current window origin
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const apkFileName = 'farmerbox-joiner-v2.5.0.apk';
+  const apkFileName = 'farmerbox.apk';
   const iosFileName = 'farmerbox-joiner-ios.zip';
   const directApkUrl = `${origin}/${apkFileName}`;
   const directIosUrl = `${origin}/${iosFileName}`;
@@ -84,14 +84,14 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
   const handleShareWhatsApp = () => {
     const text = encodeURIComponent(
-      `🌱 *FarmerBox Joiner App (v2.5.0)*\n\nDownload the mobile app for hotel vegetable orders & ₹100 commission!\n\n🤖 Android APK:\n${directApkUrl}\n\n🍎 iOS Xcode Package:\n${directIosUrl}`
+      `🌱 *FarmerBox Joiner App (v2.7.0)*\n\nDownload the mobile app for hotel vegetable orders & ₹100 commission!\n\n🤖 Android APK:\n${directApkUrl}\n\n🍎 iOS Xcode Package:\n${directIosUrl}`
     );
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };
 
   const handleShareSMS = () => {
     const text = encodeURIComponent(
-      `Download FarmerBox Joiner App v2.5.0 (Android APK: ${directApkUrl} | iOS: ${directIosUrl})`
+      `Download FarmerBox Joiner App v2.7.0 (Android APK: ${directApkUrl} | iOS: ${directIosUrl})`
     );
     window.open(`sms:?body=${text}`, '_blank');
   };
@@ -228,7 +228,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
                 </button>
               </div>
 
-              {/* Card 2: farmerbox-joiner-v2.5.0.apk (Full Standalone Build) */}
+              {/* Card 2: farmerbox-joiner-v2.7.0.apk (Full Standalone Build) */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-slate-100/60 border border-slate-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
@@ -237,22 +237,22 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
                     </span>
                   </div>
                   <h4 className="text-base font-black text-slate-900">
-                    farmerbox-joiner-v2.5.0.apk
+                    farmerbox-joiner-v2.7.0.apk
                   </h4>
                   <p className="text-xs text-slate-600">
-                    Release v2.5.0 • Size: <strong>134 MB</strong> • Bundled Offline Assets • Signed Keystore
+                    Release v2.7.0 • Size: <strong>188 MB</strong> • Advance Side Scroller • Signed Keystore
                   </p>
                   <p className="text-[11px] font-mono text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded inline-block mt-1">
-                    Path: public\farmerbox-joiner-v2.5.0.apk
+                    Path: public\farmerbox.apk
                   </p>
                 </div>
 
                 <button
-                  onClick={() => triggerDirectDownload('farmerbox-joiner-v2.5.0.apk')}
+                  onClick={() => triggerDirectDownload('farmerbox.apk')}
                   className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer shrink-0"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download v2.5.0 APK</span>
+                  <span>Download v2.7.0 APK</span>
                 </button>
               </div>
 

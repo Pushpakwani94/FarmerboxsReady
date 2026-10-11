@@ -62,7 +62,7 @@ export const JoinerMobileAppManagementPage: React.FC = () => {
   const [otaBroadcastSuccess, setOtaBroadcastSuccess] = useState(false);
   const [dispatchedOrderId, setDispatchedOrderId] = useState<string | null>(null);
 
-  const apkFileName = 'farmerbox-joiner-v2.5.0.apk';
+  const apkFileName = 'farmerbox.apk';
   const iosFileName = 'farmerbox-joiner-ios.zip';
 
   // Trigger browser APK download
@@ -89,9 +89,9 @@ export const JoinerMobileAppManagementPage: React.FC = () => {
   const handleTriggerOta = () => {
     setOtaBroadcastSuccess(true);
     addNotification({
-      title: '🚀 App Update v2.5.0 Available!',
-      message: 'FarmerBox v2.5.0 is now live! Includes Dal & Pulses category, active hotel toggle, and reorder fixes.',
-      subtitle: 'Tap to update to latest build v2.5.0',
+      title: '🚀 App Update v2.7.0 Available!',
+      message: 'FarmerBox v2.7.0 is now live! Includes advance side scroller, Mandi wholesale rates ticker, and key hotel accounts.',
+      subtitle: 'Tap to update to latest build v2.7.0',
       userType: 'Joiners',
       category: 'System',
       iconType: 'system',
@@ -100,7 +100,7 @@ export const JoinerMobileAppManagementPage: React.FC = () => {
       isAppUpdate: true,
       hasUpdateFile: true,
       fileName: apkFileName,
-      version: 'v2.5.0'
+      version: 'v2.7.0'
     });
     setTimeout(() => setOtaBroadcastSuccess(false), 3500);
   };

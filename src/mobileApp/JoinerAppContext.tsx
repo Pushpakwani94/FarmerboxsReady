@@ -405,7 +405,7 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const appVersion = 'v2.5.0';
+  const appVersion = 'v2.7.0';
 
   const markNotificationsRead = useCallback(() => {
     const now = Date.now();

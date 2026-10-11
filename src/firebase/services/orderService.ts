@@ -447,10 +447,12 @@ export const orderService = {
 
   /**
    * Updates general order status.
+   * When status is updated to 'Delivered', automatically triggers commission credit.
    */
-  async updateStatus(orderId: string, status: OrderStatus): Promise<void> {
+  async updateStatus(orderId: string, status: OrderStatus, fallbackOrder?: any): Promise<void> {
     if (isFirebaseConfigured() && db) {
-      const docRef = doc(db, COLLECTION, orderId);
+      const cleanId = String(orderId).trim();
+      const docRef = doc(db, COLLECTION, cleanId);
       const updates: any = {
         status,
         orderStatus: status,
@@ -459,7 +461,27 @@ export const orderService = {
       if (status === 'Delivered') {
         updates.deliveredAt = serverTimestamp();
       }
-      await updateDoc(docRef, updates);
+      try {
+        await updateDoc(docRef, updates);
+      } catch (e) {
+        console.warn(`Notice updating status in firestore for order ${cleanId}:`, e);
+      }
+
+      // AUTOMATIC COMMISSION UPDATE ONCE DELIVERY DONE
+      if (status === 'Delivered') {
+        try {
+          await this.approveDelivery(cleanId, 'Super Admin / Delivery Done', fallbackOrder);
+        } catch (err) {
+          console.warn('Auto commission credit error on updateStatus Delivered:', err);
+        }
+      }
+    } else if (status === 'Delivered' && fallbackOrder) {
+      // Local or offline fallback
+      try {
+        await walletService.creditOrderCommission(fallbackOrder, 'Super Admin / Delivery Done');
+      } catch (err) {
+        console.warn('Auto commission credit error in offline fallback:', err);
+      }
     }
   },
 
@@ -495,15 +517,34 @@ export const orderService = {
    * Order total > ₹1,500 credits ₹100 commission.
    * Order total <= ₹1,500 receives ₹0 commission.
    */
-  async approveDelivery(orderId: string, adminName: string = 'Super Admin'): Promise<{ success: boolean; message: string; transactionId?: string; isBonusEligible?: boolean }> {
+  async approveDelivery(
+    orderId: string,
+    adminName: string = 'Super Admin',
+    fallbackOrder?: any
+  ): Promise<{ success: boolean; message: string; transactionId?: string; isBonusEligible?: boolean }> {
     if (!isFirebaseConfigured() || !db) {
+      if (fallbackOrder) {
+        return await walletService.creditOrderCommission(fallbackOrder, adminName);
+      }
       return { success: false, message: 'Firestore not configured' };
     }
 
     try {
-      const docRef = doc(db, COLLECTION, orderId);
-      const snap = await getDoc(docRef);
+      const cleanId = String(orderId).trim();
+      const docRef = doc(db, COLLECTION, cleanId);
+      let snap = await getDoc(docRef);
+
+      // Check alternate ID without leading '#'
       if (!snap.exists()) {
+        const unhashedId = cleanId.replace(/^#/, '');
+        const altRef = doc(db, COLLECTION, unhashedId);
+        snap = await getDoc(altRef);
+      }
+
+      if (!snap.exists()) {
+        if (fallbackOrder) {
+          return await walletService.creditOrderCommission(fallbackOrder, adminName);
+        }
         return { success: false, message: `Order ${orderId} does not exist.` };
       }
 
@@ -511,6 +552,9 @@ export const orderService = {
       return await walletService.creditOrderCommission(orderData, adminName);
     } catch (err: any) {
       console.error('approveDelivery exception:', err);
+      if (fallbackOrder) {
+        return await walletService.creditOrderCommission(fallbackOrder, adminName);
+      }
       return { success: false, message: err?.message || 'Failed to approve delivery' };
     }
   },

@@ -22,9 +22,9 @@ export const AppUpdateModal: React.FC = () => {
 
   if (!isUpdateModalOpen) return null;
 
-  const newVersion = 'v2.5.0';
-  const releaseDate = 'Today, 17 Sep 2026';
-  const apkFileName = 'farmerbox-joiner-v2.5.0.apk';
+  const newVersion = 'v2.7.0';
+  const releaseDate = 'Today, 11 Oct 2026';
+  const apkFileName = 'farmerbox.apk';
 
   const handleClose = () => {
     setIsUpdateModalOpen(false);

@@ -46,8 +46,8 @@ export const NotificationsPage: React.FC = () => {
   const [userType, setUserType] = useState<'Hotels' | 'Drivers' | 'Joiners' | 'Admins' | 'All Users'>('All Users');
   const [scheduleDate, setScheduleDate] = useState('');
   const [notificationType, setNotificationType] = useState<'Standard Alert' | 'Order Notice' | 'Commission Notice' | 'App Update Release'>('Standard Alert');
-  const [selectedFile, setSelectedFile] = useState('farmerbox-joiner-v2.5.0.apk');
-  const [targetVersion, setTargetVersion] = useState('v2.5.0');
+  const [selectedFile, setSelectedFile] = useState('farmerbox.apk');
+  const [targetVersion, setTargetVersion] = useState('v2.7.0');
   const [sendFeedback, setSendFeedback] = useState<string | null>(null);
   const [selectedNotif, setSelectedNotif] = useState<NotificationItem | null>(null);
 
@@ -470,14 +470,14 @@ export const NotificationsPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
               <button
                 onClick={() => handleQuickPreset({
-                  title: '🚀 App Update v2.5.0 Available!',
-                  msg: 'Enhanced catalog search, instant sync, and faster hotel ordering now live. Update your app today.',
+                  title: '🚀 App Update v2.7.0 Available!',
+                  msg: 'Enhanced hotel joiner experience, advance side scrollers, live Mandi rates ticker, and key accounts now live. Update your app today.',
                   target: 'Joiners',
                   type: 'App Update Release'
                 })}
                 className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 rounded-lg text-left border border-purple-200/60 font-semibold cursor-pointer transition-colors truncate"
               >
-                🚀 App Update v2.5.0
+                🚀 App Update v2.7.0
               </button>
               <button
                 onClick={() => handleQuickPreset({
@@ -558,9 +558,9 @@ export const NotificationsPage: React.FC = () => {
                       onChange={e => setSelectedFile(e.target.value)}
                       className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg bg-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-600 cursor-pointer"
                     >
-                      <option value="farmerbox-joiner-v2.5.0.apk">farmerbox-joiner-v2.5.0.apk (Latest Android Build)</option>
-                      <option value="FarmerBox.apk">FarmerBox.apk (Public Build)</option>
-                      <option value="farmerbox-joiner-latest.apk">farmerbox-joiner-latest.apk (Production Stable)</option>
+                      <option value="farmerbox.apk">farmerbox.apk (Latest Android Build v2.7.0)</option>
+                      <option value="FarmerBox.apk">FarmerBox.apk (Public Release)</option>
+                      <option value="farmerbox-joiner-v2.7.0.apk">farmerbox-joiner-v2.7.0.apk (Production Stable)</option>
                     </select>
                   </div>
 
@@ -568,7 +568,7 @@ export const NotificationsPage: React.FC = () => {
                     <label className="block text-slate-600 font-medium text-[11px] mb-0.5">Version String</label>
                     <input
                       type="text"
-                      placeholder="e.g. v2.5.0"
+                      placeholder="e.g. v2.7.0"
                       value={targetVersion}
                       onChange={e => setTargetVersion(e.target.value)}
                       className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg bg-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-600"
@@ -685,10 +685,10 @@ export const NotificationsPage: React.FC = () => {
               <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs text-purple-900 flex items-center justify-between">
                 <div>
                   <span className="font-bold block">Attached Package File</span>
-                  <span className="font-mono text-[11px] text-purple-700">{selectedNotif.fileName || 'farmerbox-joiner-v2.5.0.apk'}</span>
+                  <span className="font-mono text-[11px] text-purple-700">{selectedNotif.fileName || 'farmerbox.apk'}</span>
                 </div>
                 <span className="px-2 py-0.5 bg-purple-200 font-bold rounded text-[10px]">
-                  {selectedNotif.version || 'v2.5.0'}
+                  {selectedNotif.version || 'v2.7.0'}
                 </span>
               </div>
             )}

@@ -15,7 +15,11 @@ import {
   Phone,
   User,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  ShoppingCart,
+  Star,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { useJoinerApp, deduplicateMobileHotels } from '../JoinerAppContext';
 import type { MobileHotel } from '../JoinerAppContext';
@@ -23,7 +27,7 @@ import { MobileBottomNav } from '../components/MobileBottomNav';
 
 export const MyHotelsScreen: React.FC = () => {
   const { hotels, orders, setCurrentScreen, setSelectedHotel, updateHotelStatus, updateHotel, deleteHotel, userProfile } = useJoinerApp();
-  const [activeFilter, setActiveFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [activeFilter, setActiveFilter] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusChangeToast, setStatusChangeToast] = useState<{ hotelName: string; status: string } | null>(null);
 
@@ -49,18 +53,50 @@ export const MyHotelsScreen: React.FC = () => {
   const activeCount = uniqueHotels.filter(h => h.status === 'Active').length;
   const inactiveCount = uniqueHotels.filter(h => h.status !== 'Active').length;
 
-  const filterTabs = [
-    { label: `All (${allCount})`, value: 'All' },
-    { label: `Active (${activeCount})`, value: 'Active' },
-    { label: `Inactive (${inactiveCount})`, value: 'Inactive' }
-  ];
+  // Extract distinct zones for horizontal filter pill slider
+  const uniqueZones = useMemo(() => {
+    const zones = new Set<string>();
+    uniqueHotels.forEach(h => {
+      if (h.zone && h.zone.trim()) {
+        zones.add(h.zone.trim());
+      }
+    });
+    return Array.from(zones);
+  }, [uniqueHotels]);
+
+  const filterTabs = useMemo(() => {
+    const baseTabs = [
+      { label: `All (${allCount})`, value: 'All' },
+      { label: `Active (${activeCount})`, value: 'Active' },
+      { label: `Inactive (${inactiveCount})`, value: 'Inactive' }
+    ];
+
+    const zoneTabs = uniqueZones.map(zone => {
+      const count = uniqueHotels.filter(h => h.zone === zone).length;
+      return { label: `${zone} (${count})`, value: `zone:${zone}` };
+    });
+
+    return [...baseTabs, ...zoneTabs];
+  }, [allCount, activeCount, inactiveCount, uniqueZones, uniqueHotels]);
+
+  // Top High-Volume Outlets for Featured Side Scroller
+  const topOutlets = useMemo(() => {
+    return [...uniqueHotels]
+      .sort((a, b) => (b.orders || 0) - (a.orders || 0))
+      .slice(0, 6);
+  }, [uniqueHotels]);
 
   const filteredHotels = uniqueHotels.filter(h => {
     const isHotelActive = h.status === 'Active';
-    const matchesFilter =
-      activeFilter === 'All' ||
-      (activeFilter === 'Active' && isHotelActive) ||
-      (activeFilter === 'Inactive' && !isHotelActive);
+
+    let matchesFilter = true;
+    if (activeFilter === 'All') matchesFilter = true;
+    else if (activeFilter === 'Active') matchesFilter = isHotelActive;
+    else if (activeFilter === 'Inactive') matchesFilter = !isHotelActive;
+    else if (activeFilter.startsWith('zone:')) {
+      const targetZone = activeFilter.replace('zone:', '');
+      matchesFilter = h.zone === targetZone;
+    }
 
     const matchesSearch =
       h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -162,7 +198,7 @@ export const MyHotelsScreen: React.FC = () => {
       )}
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
         {/* Top Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -173,8 +209,10 @@ export const MyHotelsScreen: React.FC = () => {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-base font-black text-slate-900 leading-tight">My Hotels</h2>
-              <p className="text-[10px] text-slate-500 font-medium">Manage partner hotels & statuses</p>
+              <h2 className="text-base font-black text-slate-900 leading-tight">My Partner Hotels</h2>
+              <p className="text-[10px] text-slate-500 font-semibold">
+                {uniqueHotels.length} Registered Outlets • {activeCount} Active
+              </p>
             </div>
           </div>
 
@@ -191,19 +229,97 @@ export const MyHotelsScreen: React.FC = () => {
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search hotel name, area..."
+            placeholder="Search hotel name, zone, manager..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600 shadow-2xs"
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+        {/* ======================================================== */}
+        {/* ADVANCE SIDE SCROLLER: FEATURED VIP OUTLETS CAROUSEL     */}
+        {/* ======================================================== */}
+        {topOutlets.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <h3 className="font-black text-slate-900 text-xs">
+                  Key Accounts & Quick Reorder
+                </h3>
+              </div>
+              <span className="text-[9.5px] font-bold text-slate-400">
+                Top Performing
+              </span>
+            </div>
+
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth pb-1">
+              {topOutlets.map(hotel => {
+                const isActive = hotel.status === 'Active';
+                return (
+                  <div
+                    key={hotel.id}
+                    onClick={() => handleSelectHotel(hotel)}
+                    className="w-[180px] shrink-0 snap-start bg-white rounded-2xl border border-slate-200 p-2.5 shadow-2xs hover:border-emerald-500 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="relative w-full h-20 rounded-xl overflow-hidden mb-2 bg-slate-100">
+                        <img
+                          src={hotel.image}
+                          alt={hotel.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=300';
+                          }}
+                        />
+                        <span
+                          className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[8.5px] font-black text-white ${
+                            isActive ? 'bg-emerald-600' : 'bg-slate-700'
+                          }`}
+                        >
+                          {isActive ? '● Active' : 'Offline'}
+                        </span>
+                      </div>
+
+                      <h4 className="font-black text-slate-900 text-xs line-clamp-1 group-hover:text-emerald-700 transition-colors">
+                        {hotel.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">
+                        {hotel.zone} • {hotel.contactPerson || 'Manager'}
+                      </p>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[9.5px] font-bold text-slate-600">
+                        {hotel.orders || 0} orders
+                      </span>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectHotel(hotel);
+                        }}
+                        className="px-2 py-1 bg-[#15803d] hover:bg-[#166534] text-white text-[10px] font-black rounded-lg flex items-center gap-0.5 shadow-2xs"
+                      >
+                        <ShoppingCart className="w-2.5 h-2.5" /> Order
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* ADVANCE SIDE SCROLLER: HORIZONTAL ZONE & FILTER PILLS    */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 text-xs">
           {filterTabs.map(tab => (
             <button
               key={tab.value}
-              onClick={() => setActiveFilter(tab.value as any)}
+              onClick={() => setActiveFilter(tab.value)}
               className={`px-3 py-1.5 rounded-xl text-[11px] font-black whitespace-nowrap transition-colors cursor-pointer ${
                 activeFilter === tab.value
                   ? 'bg-[#15803d] text-white shadow-2xs'
@@ -217,7 +333,7 @@ export const MyHotelsScreen: React.FC = () => {
 
         {/* Hotels List or Empty State */}
         <div className="space-y-2.5 pt-1">
-          {hotels.length === 0 ? (
+          {uniqueHotels.length === 0 ? (
             <div className="py-12 px-4 text-center space-y-3.5 bg-white rounded-2xl border border-dashed border-slate-300/90 shadow-2xs mt-1">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-[#15803d] flex items-center justify-center mx-auto shadow-xs">
                 <Building2 className="w-7 h-7" />
@@ -333,6 +449,17 @@ export const MyHotelsScreen: React.FC = () => {
                       >
                         <Trash2 className="w-3 h-3 text-rose-500" /> Delete
                       </button>
+
+                      {hotel.phone && (
+                        <a
+                          href={`tel:${hotel.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 transition-colors"
+                          title="Call Hotel Contact"
+                        >
+                          <Phone className="w-3 h-3 text-blue-500" /> Call
+                        </a>
+                      )}
                     </div>
 
                     <span className="text-emerald-700 font-black flex items-center gap-0.5">
@@ -432,39 +559,39 @@ export const MyHotelsScreen: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">GST Number</label>
+                  <label className="block font-bold text-slate-700 mb-1">GST Number (Optional)</label>
                   <input
                     type="text"
                     value={editGst}
                     onChange={(e) => setEditGst(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-slate-900 uppercase focus:outline-emerald-600"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">FSSAI License</label>
+                  <label className="block font-bold text-slate-700 mb-1">FSSAI License (Optional)</label>
                   <input
                     type="text"
                     value={editFssai}
                     onChange={(e) => setEditFssai(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-emerald-600"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingHotel(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  className="px-4 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 py-2.5 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl disabled:opacity-50"
+                  className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
                 >
-                  {isSaving ? 'Saving Changes...' : 'Save Updates'}
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
@@ -472,22 +599,26 @@ export const MyHotelsScreen: React.FC = () => {
         </div>
       )}
 
-      {/* ================= DELETE CONFIRMATION MODAL ================= */}
+      {/* ================= DELETE HOTEL CONFIRMATION MODAL ================= */}
       {hotelToDelete && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-5 space-y-3 shadow-2xl text-center">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4 animate-in zoom-in-95 shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-black text-slate-900">Delete Hotel Partner?</h3>
-            <p className="text-xs text-slate-500">
-              Are you sure you want to remove <strong>{hotelToDelete.name}</strong>? This action cannot be undone.
-            </p>
-            <div className="flex items-center gap-2 pt-2">
+
+            <div className="text-center space-y-1">
+              <h3 className="text-sm font-black text-slate-900">Delete Partner Hotel?</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to remove <strong>{hotelToDelete.name}</strong>? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setHotelToDelete(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                className="py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -495,9 +626,9 @@ export const MyHotelsScreen: React.FC = () => {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl disabled:opacity-50"
+                className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-50"
               >
-                {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>

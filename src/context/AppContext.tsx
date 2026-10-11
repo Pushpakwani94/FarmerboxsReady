@@ -1210,8 +1210,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+    // AUTOMATIC COMMISSION UPDATE ONCE DELIVERY DONE
+    if (newStatus === 'Delivered') {
+      try {
+        const res = await approveDelivery(orderId);
+        if (res.success) {
+          return;
+        }
+      } catch (err) {
+        console.warn('Error in approveDelivery within updateOrderStatus:', err);
+      }
+    }
+
+    const matchedOrder = orders.find(
+      o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId)
+    );
+
     try {
-      await orderService.updateStatus(orderId, newStatus);
+      await orderService.updateStatus(orderId, newStatus, matchedOrder);
     } catch (e) {
       console.warn('Notice updating status in firestore:', e);
     }
@@ -1321,22 +1337,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Delivery Verification & Commission Release (Admin Approves Delivery)
   const approveDelivery = async (orderId: string): Promise<{ success: boolean; message: string }> => {
-    const res = await orderService.approveDelivery(orderId, adminProfile.name || 'Super Admin');
+    const matchedOrder = orders.find(
+      o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId)
+    );
+
+    const res = await orderService.approveDelivery(orderId, adminProfile.name || 'Super Admin', matchedOrder);
 
     if (res.success) {
+      const totalAmt = Number(matchedOrder?.totalAmount ?? matchedOrder?.amount ?? 0);
+      const isEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : totalAmt > 1500;
+
       setOrders(prev =>
         prev.map(ord => {
           if (String(ord.id) === String(orderId) || String(ord.orderId) === String(orderId)) {
-            const totalAmt = Number(ord.totalAmount ?? ord.amount ?? 0);
-            const isEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : totalAmt > 1500;
+            const ordAmt = Number(ord.totalAmount ?? ord.amount ?? 0);
+            const ordEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : ordAmt > 1500;
             return {
               ...ord,
               adminApproved: true,
               status: 'Delivered',
               orderStatus: 'Delivered',
-              commissionAmount: isEligible ? 100 : 0,
-              commissionStatus: isEligible ? 'credited' : 'not_eligible',
-              walletCredited: isEligible
+              commissionAmount: ordEligible ? 100 : 0,
+              commissionStatus: ordEligible ? 'credited' : 'not_eligible',
+              walletCredited: ordEligible
             };
           }
           return ord;
@@ -1346,23 +1369,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId) === String(orderId))) {
         setSelectedOrder(prev => {
           if (!prev) return null;
-          const totalAmt = Number(prev.totalAmount ?? prev.amount ?? 0);
-          const isEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : totalAmt > 1500;
+          const ordAmt = Number(prev.totalAmount ?? prev.amount ?? 0);
+          const ordEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : ordAmt > 1500;
           return {
             ...prev,
             adminApproved: true,
             status: 'Delivered',
             orderStatus: 'Delivered',
-            commissionAmount: isEligible ? 100 : 0,
-            commissionStatus: isEligible ? 'credited' : 'not_eligible',
-            walletCredited: isEligible
+            commissionAmount: ordEligible ? 100 : 0,
+            commissionStatus: ordEligible ? 'credited' : 'not_eligible',
+            walletCredited: ordEligible
           };
         });
       }
 
-      const isBonusGiven = res.isBonusEligible !== false;
+      // Real-time update to Joiners collection state in memory
+      if (isEligible) {
+        setJoiners(prev =>
+          prev.map(j => {
+            const isMatch =
+              (matchedOrder?.joinerId && (String(j.id) === String(matchedOrder.joinerId) || String(j.uid) === String(matchedOrder.joinerId))) ||
+              (matchedOrder?.joiner && j.name && j.name.toLowerCase() === matchedOrder.joiner.toLowerCase()) ||
+              (matchedOrder?.joinerPhone && j.mobile && j.mobile.includes(matchedOrder.joinerPhone.slice(-10)));
+
+            if (isMatch) {
+              return {
+                ...j,
+                walletBalance: (j.walletBalance || 0) + 100,
+                totalEarnings: (j.totalEarnings || j.commissionEarned || 0) + 100,
+                commissionEarned: (j.commissionEarned || j.totalEarnings || 0) + 100
+              };
+            }
+            return j;
+          })
+        );
+      }
+
+      const isBonusGiven = res.isBonusEligible !== false && isEligible;
       addNotification({
-        title: `Delivery Approved: Order #${orderId} 🎉`,
+        title: `Delivery Completed: Order #${orderId} 🎉`,
         message: isBonusGiven
           ? `Delivery verified! ₹100 commission credited to partner's wallet.`
           : `Delivery verified! Order total is ₹1,500 or below (not eligible for ₹100 bonus).`,
