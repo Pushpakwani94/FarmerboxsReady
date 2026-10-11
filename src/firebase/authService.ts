@@ -101,24 +101,27 @@ export class AuthService {
             } else if (this.currentUser && this.currentUser.uid === fbUser.uid) {
               // Keep active profile in memory
             } else {
-              const cleanPhone = (fbUser.phoneNumber || '').replace('+91', '').replace(/[^0-9]/g, '');
               const isSuperAdmin = (fbUser.email && fbUser.email.includes('admin')) || false;
-              const defaultUser: AppUser = {
-                uid: fbUser.uid,
-                name: fbUser.displayName || (isSuperAdmin ? 'Super Admin' : (cleanPhone ? `Joiner ${cleanPhone.slice(-4)}` : 'FarmerBox Joiner')),
-                email: fbUser.email || (cleanPhone ? `${cleanPhone}@farmerbox.in` : ''),
-                phone: cleanPhone,
-                phoneNumber: fbUser.phoneNumber || (cleanPhone ? `+91${cleanPhone}` : ''),
-                role: isSuperAdmin ? 'admin' : 'joiner',
-                zone: isSuperAdmin ? 'All Zones (HQ)' : 'Kharadi Zone',
-                avatar: isSuperAdmin
-                  ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300'
-                  : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              };
-              this.currentUser = defaultUser;
-              await this.saveUserProfile(defaultUser);
+              if (isSuperAdmin) {
+                const defaultAdmin: AppUser = {
+                  uid: fbUser.uid,
+                  name: fbUser.displayName || 'Super Admin',
+                  email: fbUser.email || 'admin@farmerbox.com',
+                  phone: '9876543210',
+                  phoneNumber: '+919876543210',
+                  role: 'admin',
+                  zone: 'All Zones (HQ)',
+                  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                };
+                this.currentUser = defaultAdmin;
+                await this.saveUserProfile(defaultAdmin);
+              } else {
+                // Strictly disallow auto-creating hotel joiners from mobile app sessions
+                console.warn('Unauthorized session: user is not present in database. Access denied.');
+                this.currentUser = null;
+              }
             }
           } else {
             // User is signed out in Firebase Auth
@@ -418,43 +421,10 @@ export class AuthService {
       }
 
       if (!profile) {
-        // Create new joiner profile in Firestore ONLY if it does not exist
-        profile = {
-          uid,
-          name: optionalName || `Joiner ${cleanPhone.slice(-4) || 'Partner'}`,
-          phone: cleanPhone,
-          phoneNumber: `+91${cleanPhone}`,
-          email: `${cleanPhone}@farmerbox.in`,
-          role: 'joiner',
-          zone: optionalZone ? (optionalZone.includes('Zone') ? optionalZone : `${optionalZone} Zone`) : 'Kharadi Zone',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        await this.saveUserProfile(profile);
-
-        // Also register in joiners/{uid} collection for Admin dashboard visibility
-        if (db) {
-          try {
-            await setDoc(doc(db, 'joiners', uid), {
-              id: uid,
-              name: profile.name,
-              mobile: cleanPhone,
-              phone: cleanPhone,
-              email: profile.email,
-              zone: profile.zone.replace(' Zone', ''),
-              status: 'Active',
-              joinerCode: `JN${uid.slice(-4).toUpperCase()}`,
-              totalHotels: 0,
-              totalOrders: 0,
-              totalEarnings: 0,
-              commissionEarned: 0,
-              joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-            }, { merge: true });
-          } catch (e) {
-            console.warn('Joiners doc creation notice:', e);
-          }
-        }
+        // Strictly disallow creating new hotel joiner from hotel joiner app
+        throw new Error(
+          'Access Denied: Mobile number (+91 ' + cleanPhone + ') is not registered as an authorized Hotel Joiner in the database. Joiner accounts must be registered by FarmerBox Administration.'
+        );
       }
 
       this.currentUser = profile;
@@ -644,65 +614,187 @@ export class AuthService {
       return profile;
     }
 
-    // 3. If Role is JOINER: Validate registered joiner profile or standard credentials
-    const cleanPhone = cleanId.replace(/[^0-9]/g, '');
+    // 3. If Role is JOINER: Strictly validate username and password from database
+    const rawInput = (identifier || '').trim();
+    const cleanIdLower = rawInput.toLowerCase();
+    const cleanPhone = rawInput.replace(/[^0-9]/g, '').slice(-10);
 
-    // Check if phone number is valid length
-    if (!isEmail && (cleanPhone.length < 10 || cleanPhone.length > 13)) {
-      throw new Error('Please enter a valid 10-digit mobile number.');
+    if (!rawInput) {
+      throw new Error('Please enter your registered mobile number or username.');
+    }
+    if (!cleanPassword) {
+      throw new Error('Please enter your password.');
     }
 
     let foundJoinerData: any = null;
+    let foundUserData: any = null;
+
+    // A. Check Firestore joiners and users collection
     if (db) {
       try {
         const jCol = collection(db, 'joiners');
-        const qMobile = query(jCol, where('mobile', '==', cleanPhone));
-        const snapMobile = await getDocs(qMobile);
-        if (!snapMobile.empty) {
-          foundJoinerData = { id: snapMobile.docs[0].id, ...snapMobile.docs[0].data() };
-        } else {
-          const docDirect = await getDoc(doc(db, 'joiners', `usr_${cleanPhone}`));
-          if (docDirect.exists()) {
-            foundJoinerData = { id: docDirect.id, ...docDirect.data() };
+
+        // 1. By Phone / Mobile in joiners collection
+        if (cleanPhone && cleanPhone.length === 10) {
+          const snapMobile = await getDocs(query(jCol, where('mobile', '==', cleanPhone)));
+          if (!snapMobile.empty) {
+            foundJoinerData = { id: snapMobile.docs[0].id, ...snapMobile.docs[0].data() };
           } else {
-            const docPhone = await getDoc(doc(db, 'joiners', cleanPhone));
-            if (docPhone.exists()) {
-              foundJoinerData = { id: docPhone.id, ...docPhone.data() };
+            const snapPhone = await getDocs(query(jCol, where('phone', '==', cleanPhone)));
+            if (!snapPhone.empty) {
+              foundJoinerData = { id: snapPhone.docs[0].id, ...snapPhone.docs[0].data() };
+            }
+          }
+        }
+
+        // 2. By Email in joiners collection
+        if (!foundJoinerData && cleanIdLower.includes('@')) {
+          const snapEmail = await getDocs(query(jCol, where('email', '==', cleanIdLower)));
+          if (!snapEmail.empty) {
+            foundJoinerData = { id: snapEmail.docs[0].id, ...snapEmail.docs[0].data() };
+          }
+        }
+
+        // 3. By Joiner Code (e.g. JN001, JN9876) in joiners collection
+        if (!foundJoinerData && rawInput.toUpperCase().startsWith('JN')) {
+          const snapCode = await getDocs(query(jCol, where('joinerCode', '==', rawInput.toUpperCase())));
+          if (!snapCode.empty) {
+            foundJoinerData = { id: snapCode.docs[0].id, ...snapCode.docs[0].data() };
+          }
+        }
+
+        // 4. By Direct Document IDs in joiners collection
+        if (!foundJoinerData) {
+          if (cleanPhone && cleanPhone.length === 10) {
+            const docDirect = await getDoc(doc(db, 'joiners', `usr_${cleanPhone}`));
+            if (docDirect.exists()) {
+              foundJoinerData = { id: docDirect.id, ...docDirect.data() };
+            } else {
+              const docPhone = await getDoc(doc(db, 'joiners', cleanPhone));
+              if (docPhone.exists()) {
+                foundJoinerData = { id: docPhone.id, ...docPhone.data() };
+              }
+            }
+          } else {
+            const docRaw = await getDoc(doc(db, 'joiners', rawInput));
+            if (docRaw.exists()) {
+              foundJoinerData = { id: docRaw.id, ...docRaw.data() };
+            }
+          }
+        }
+
+        // 5. Check 'users' collection for joiner role
+        const uCol = collection(db, 'users');
+        if (cleanPhone && cleanPhone.length === 10) {
+          const snapUPhone = await getDocs(query(uCol, where('phone', '==', cleanPhone)));
+          if (!snapUPhone.empty) {
+            const uData = snapUPhone.docs[0].data();
+            if (uData.role === 'joiner' || !uData.role) {
+              foundUserData = { id: snapUPhone.docs[0].id, ...uData };
+              if (!foundJoinerData) foundJoinerData = foundUserData;
+            }
+          }
+        }
+        if (!foundUserData && cleanIdLower.includes('@')) {
+          const snapUEmail = await getDocs(query(uCol, where('email', '==', cleanIdLower)));
+          if (!snapUEmail.empty) {
+            const uData = snapUEmail.docs[0].data();
+            if (uData.role === 'joiner' || !uData.role) {
+              foundUserData = { id: snapUEmail.docs[0].id, ...uData };
+              if (!foundJoinerData) foundJoinerData = foundUserData;
             }
           }
         }
       } catch (e) {
-        console.warn('Joiner lookup notice:', e);
+        console.warn('Database joiner lookup notice:', e);
       }
     }
 
-    if (!uid) {
-      if (foundJoinerData && foundJoinerData.id) {
-        uid = String(foundJoinerData.id);
-      } else {
-        const existingUser = await this.fetchUserProfile(`usr_${cleanPhone}`);
-        if (cleanPassword.length >= 3) {
-          uid = existingUser?.uid || `usr_${cleanPhone}`;
-        } else {
-          throw new Error('Password must be at least 3 characters long.');
+    // B. Check local joiners storage as fallback
+    if (!foundJoinerData && typeof window !== 'undefined') {
+      try {
+        const storedJoiners = localStorage.getItem('farmerbox_joiners');
+        if (storedJoiners) {
+          const parsed: any[] = JSON.parse(storedJoiners);
+          const match = parsed.find(j => {
+            const jPhone = String(j.mobile || j.phone || '').replace(/[^0-9]/g, '').slice(-10);
+            const jEmail = String(j.email || '').trim().toLowerCase();
+            const jCode = String(j.joinerCode || '').trim().toUpperCase();
+            const jName = String(j.name || '').trim().toLowerCase();
+            const jId = String(j.id || j.uid || '');
+
+            return (
+              (cleanPhone && cleanPhone.length === 10 && jPhone === cleanPhone) ||
+              (cleanIdLower.includes('@') && jEmail === cleanIdLower) ||
+              (rawInput.toUpperCase().startsWith('JN') && jCode === rawInput.toUpperCase()) ||
+              (cleanIdLower && jName === cleanIdLower) ||
+              jId === rawInput ||
+              (cleanPhone && jId === `usr_${cleanPhone}`)
+            );
+          });
+          if (match) {
+            foundJoinerData = match;
+          }
         }
+      } catch (e) {
+        console.warn('Local joiner lookup notice:', e);
       }
     }
+
+    // STRICT REQUIREMENT 1: Do not create new hotel joiner. If username/phone is not present in database -> Not allowed to user!
+    if (!foundJoinerData) {
+      throw new Error(
+        'Access Denied: Username or mobile number is not present in the database. Creating new joiners from the mobile app is not allowed. Please contact FarmerBox Administrator to register your account.'
+      );
+    }
+
+    // STRICT REQUIREMENT 2: Check active status
+    if (foundJoinerData.status === 'Inactive') {
+      throw new Error(
+        'Access Denied: Your Hotel Joiner account has been deactivated. Please contact FarmerBox Administrator to reactivate your account.'
+      );
+    }
+
+    // STRICT REQUIREMENT 3: Check password against database records
+    const validPasswords: string[] = [];
+    if (foundJoinerData.password) validPasswords.push(String(foundJoinerData.password).trim());
+    if (foundJoinerData.dummyPassword) validPasswords.push(String(foundJoinerData.dummyPassword).trim());
+    if (foundJoinerData.pin) validPasswords.push(String(foundJoinerData.pin).trim());
+    if (foundUserData?.password) validPasswords.push(String(foundUserData.password).trim());
+
+    // If joiner record was created without an explicit custom password, default Admin password applies
+    if (validPasswords.length === 0) {
+      validPasswords.push('FarmerBox@123');
+    }
+
+    const isPasswordValid = validPasswords.some(
+      dbPass => dbPass === cleanPassword || dbPass.toLowerCase() === cleanPassword.toLowerCase()
+    );
+
+    if (!isPasswordValid) {
+      throw new Error(
+        'Access Denied: Invalid password. The entered password does not match the database records for this account.'
+      );
+    }
+
+    // Authenticated successfully: Use existing database record (DO NOT create a new joiner)
+    uid = String(foundJoinerData.id || foundJoinerData.uid || `usr_${cleanPhone || 'joiner'}`);
 
     let profile = await this.fetchUserProfile(uid);
     if (!profile) {
-      const joinerName = foundJoinerData?.name || `Joiner ${cleanPhone.slice(-4) || 'Partner'}`;
+      const joinerName = foundJoinerData?.name || `Joiner ${cleanPhone ? cleanPhone.slice(-4) : 'Partner'}`;
       const joinerZone = foundJoinerData?.zone ? (foundJoinerData.zone.includes('Zone') ? foundJoinerData.zone : `${foundJoinerData.zone} Zone`) : 'Kharadi Zone';
+      const actualPhone = cleanPhone || String(foundJoinerData.mobile || foundJoinerData.phone || '').replace(/[^0-9]/g, '');
       profile = {
         uid,
         name: joinerName,
-        email: emailToUse,
-        phone: cleanPhone,
-        phoneNumber: `+91${cleanPhone}`,
+        email: foundJoinerData.email || emailToUse,
+        phone: actualPhone,
+        phoneNumber: actualPhone ? `+91${actualPhone}` : '',
         role: 'joiner',
         zone: joinerZone,
         avatar: foundJoinerData?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        createdAt: new Date().toISOString(),
+        createdAt: foundJoinerData.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       await this.saveUserProfile(profile);
@@ -721,75 +813,18 @@ export class AuthService {
   }
 
   /**
-   * Register a new Joiner User with full profile details
+   * Register a new Joiner User with full profile details (Disabled for public self-service)
    */
-  public async registerJoiner(data: {
+  public async registerJoiner(_data: {
     name: string;
     phone: string;
     email: string;
     zone: string;
     password?: string;
   }): Promise<AppUser> {
-    const validation = this.validateIndianPhoneNumber(data.phone);
-    const cleanPhone = validation.isValid ? validation.clean : data.phone.replace(/[^0-9]/g, '');
-    const emailToUse = data.email ? data.email.trim() : `${cleanPhone}@farmerbox.in`;
-
-    let uid: string | null = null;
-
-    if (this.authInstance && data.password) {
-      try {
-        const cred = await createUserWithEmailAndPassword(this.authInstance, emailToUse, data.password);
-        uid = cred.user.uid;
-      } catch (err: any) {
-        console.warn('Firebase Auth create user note:', err?.message);
-      }
-    }
-
-    if (!uid) {
-      uid = `usr_${cleanPhone || emailToUse.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-    }
-
-    const newUser: AppUser = {
-      uid,
-      name: data.name,
-      phone: cleanPhone,
-      phoneNumber: `+91${cleanPhone}`,
-      email: emailToUse,
-      zone: data.zone.includes('Zone') ? data.zone : `${data.zone} Zone`,
-      role: 'joiner',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.saveUserProfile(newUser);
-
-    if (db) {
-      try {
-        await setDoc(doc(db, 'joiners', uid), {
-          id: uid,
-          name: data.name,
-          mobile: cleanPhone,
-          phone: cleanPhone,
-          email: emailToUse,
-          zone: newUser.zone.replace(' Zone', ''),
-          status: 'Active',
-          joinerCode: `JN${uid.slice(-4).toUpperCase()}`,
-          totalHotels: 0,
-          totalOrders: 0,
-          totalEarnings: 0,
-          commissionEarned: 0,
-          joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-        }, { merge: true });
-      } catch (err) {
-        console.warn('Failed to save joiner record in Firestore:', err);
-      }
-    }
-
-    this.currentUser = newUser;
-    this.persistSession(newUser);
-    this.notifyListeners();
-    return newUser;
+    throw new Error(
+      'Hotel Joiner self-registration is not available. Accounts are strictly created and managed by FarmerBox Administration. Please contact Admin at admin@farmerbox.in or +91 98765 43210.'
+    );
   }
 
   /**

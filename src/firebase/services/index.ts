@@ -7,3 +7,4 @@ export * from './orderService';
 export * from './deliveryService';
 export * from './offerService';
 export * from './storageService';
+export * from './walletService';

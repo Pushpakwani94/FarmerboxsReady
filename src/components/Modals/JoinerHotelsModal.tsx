@@ -18,21 +18,40 @@ export const JoinerHotelsModal: React.FC<JoinerHotelsModalProps> = ({ isOpen, on
 
   const allHotels = useMemo(() => {
     if (!joiner) return [];
+
+    const jName = (joiner.name || '').trim().toLowerCase();
+    const jIdStr = String(joiner.id || '').trim();
+    const jPhone = String(joiner.mobile || joiner.phone || '').trim().replace(/[^0-9]/g, '');
+    const jCleanPhone10 = jPhone.slice(-10);
+    const jZone = (joiner.zone || '').trim().toLowerCase().replace(' zone', '');
+
     // Check if live hotels in AppContext belong to this joiner
-    const liveJoinerHotels = hotels.filter(h =>
-      (h.joiner && joiner.name && h.joiner.toLowerCase() === joiner.name.toLowerCase()) ||
-      (h.joinerId && String(h.joinerId) === String(joiner.id))
-    );
+    const liveJoinerHotels = hotels.filter(h => {
+      const hJoiner = (h.joiner || (h as any).assignedJoiner || '').trim().toLowerCase();
+      const hJoinerId = String((h as any).joinerId || (h as any).joinedBy || '').trim();
+      const hZone = (h.zone || '').trim().toLowerCase().replace(' zone', '');
+      const hJoinerPhone = String((h as any).joinerPhone || '').replace(/[^0-9]/g, '').slice(-10);
+
+      const isDirectMatch = Boolean(
+        (jName && (hJoiner === jName || hJoiner.includes(jName) || jName.includes(hJoiner))) ||
+        (jIdStr && (hJoinerId === jIdStr)) ||
+        (jCleanPhone10 && (hJoinerPhone === jCleanPhone10 || hJoinerId.includes(jCleanPhone10)))
+      );
+
+      const isZoneMatch = Boolean(jZone && hZone && (hZone === jZone || hZone.includes(jZone) || jZone.includes(hZone)));
+
+      return isDirectMatch || isZoneMatch;
+    });
 
     if (liveJoinerHotels.length > 0) {
       return liveJoinerHotels.map((h, idx) => ({
         id: typeof h.id === 'number' ? h.id : idx + 1,
         name: h.name || `Hotel ${idx + 1}`,
         location: h.zone || joiner.zone || 'Pune',
-        owner: h.ownerName || h.contactPerson || 'Hotel Manager',
+        owner: h.ownerName || (h as any).contactPerson || 'Hotel Manager',
         phone: h.mobile || h.phone || '9876543210',
-        orders: h.totalOrders || 12,
-        joinedDate: h.registrationDate || h.joinedDate || '2024-02-01',
+        orders: h.totalOrders || h.orders || 1,
+        joinedDate: h.registrationDate || (h as any).joinedDate || 'Today',
         status: h.status || 'Active'
       }));
     }

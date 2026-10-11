@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, deduplicateHotels, deduplicateJoiners, deduplicateOrders } from '../context/AppContext';
 import {
   MapPin,
   Building2,
@@ -10,8 +10,6 @@ import {
   Search,
   Edit,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   Phone,
   CheckCircle2,
   X,
@@ -19,9 +17,16 @@ import {
   Layers,
   Sparkles,
   Compass,
-  UserCheck
+  UserCheck,
+  TrendingUp,
+  ExternalLink,
+  Store,
+  Clock,
+  IndianRupee,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
-import type { Zone } from '../types';
+import type { Zone, Hotel, Joiner, Order } from '../types';
 import { authService } from '../firebase/authService';
 
 interface PuneZoneGeo {
@@ -43,28 +48,60 @@ interface PuneZoneGeo {
 
 const PUNE_ZONES_DATA: PuneZoneGeo[] = [
   {
-    id: 'pimpri-chinchwad',
-    name: 'Pimpri Chinchwad',
-    shortLabel: 'Pimpri Chinchwad',
-    category: 'North-West Industrial Hub',
-    path: 'M 40 40 C 100 25, 180 28, 250 40 C 270 70, 275 110, 260 150 C 210 160, 160 165, 100 150 C 60 120, 45 80, 40 40 Z',
-    center: { x: 150, y: 95 },
-    fill: '#ede9fe',
-    activeFill: '#ddd6fe',
+    id: 'hinjawadi',
+    name: 'Hinjawadi',
+    shortLabel: 'Hinjawadi',
+    category: 'North-West Tech Hub (Phase 1/2/3)',
+    path: 'M 35 70 C 80 40, 130 45, 175 60 C 185 95, 180 130, 160 160 C 115 165, 75 160, 45 140 C 30 115, 25 90, 35 70 Z',
+    center: { x: 105, y: 105 },
+    fill: '#f3e8ff',
+    activeFill: '#e9d5ff',
     stroke: '#a855f7',
     activeStroke: '#7e22ce',
     textColor: '#6b21a8',
     badgeBg: '#f3e8ff',
     badgeText: '#7e22ce',
-    aliases: ['pimpri', 'chinchwad', 'pcmc', 'nigdi', 'bhosari', 'pimpri chinchwad']
+    aliases: ['hinjawadi', 'hinjewadi', 'maan', 'phase 1', 'phase 2', 'phase 3', 'marunji']
+  },
+  {
+    id: 'pimpri-chinchwad',
+    name: 'Pimpri Chinchwad',
+    shortLabel: 'PCMC / Wakad',
+    category: 'North Industrial & Auto Cluster',
+    path: 'M 175 60 C 240 45, 310 50, 370 70 C 375 110, 360 145, 330 165 C 275 170, 220 165, 160 160 C 180 130, 185 95, 175 60 Z',
+    center: { x: 265, y: 110 },
+    fill: '#ede9fe',
+    activeFill: '#ddd6fe',
+    stroke: '#8b5cf6',
+    activeStroke: '#6d28d9',
+    textColor: '#5b21b6',
+    badgeBg: '#ede9fe',
+    badgeText: '#6d28d9',
+    aliases: ['pimpri', 'chinchwad', 'pcmc', 'nigdi', 'bhosari', 'wakad', 'tathawade', 'dange chowk']
+  },
+  {
+    id: 'baner',
+    name: 'Baner',
+    shortLabel: 'Baner',
+    category: 'West IT & Commercial High Street',
+    path: 'M 60 170 C 115 165, 160 160, 205 170 C 215 205, 210 240, 190 265 C 145 270, 100 260, 65 240 C 50 215, 50 190, 60 170 Z',
+    center: { x: 135, y: 215 },
+    fill: '#fce7f3',
+    activeFill: '#fbcfe8',
+    stroke: '#ec4899',
+    activeStroke: '#be185d',
+    textColor: '#9d174d',
+    badgeBg: '#fdf2f8',
+    badgeText: '#be185d',
+    aliases: ['baner', 'balewadi', 'high street', 'sus', 'mahalunge']
   },
   {
     id: 'aundh',
     name: 'Aundh',
     shortLabel: 'Aundh',
     category: 'West-Central Tech Zone',
-    path: 'M 100 150 C 160 165, 210 160, 260 150 C 270 175, 272 205, 255 240 C 195 245, 140 235, 90 215 C 85 185, 90 165, 100 150 Z',
-    center: { x: 175, y: 195 },
+    path: 'M 205 170 C 260 165, 305 170, 345 185 C 340 220, 325 250, 290 265 C 250 270, 215 265, 190 265 C 210 240, 215 205, 205 170 Z',
+    center: { x: 265, y: 215 },
     fill: '#dcfce7',
     activeFill: '#bbf7d0',
     stroke: '#22c55e',
@@ -72,31 +109,47 @@ const PUNE_ZONES_DATA: PuneZoneGeo[] = [
     textColor: '#15803d',
     badgeBg: '#ecfdf5',
     badgeText: '#047857',
-    aliases: ['aundh', 'baner', 'pashan', 'university']
+    aliases: ['aundh', 'pashan', 'university', 'bremen chowk', 'baner road']
   },
   {
-    id: 'pune',
-    name: 'Pune',
-    shortLabel: 'Pune (Central)',
-    category: 'Metropolitan Core Hub',
-    path: 'M 90 215 C 140 235, 195 245, 255 240 C 295 235, 340 240, 380 255 C 400 295, 395 340, 370 380 C 310 395, 250 380, 200 350 C 140 330, 100 280, 90 215 Z',
-    center: { x: 240, y: 305 },
-    fill: '#fef3c7',
-    activeFill: '#fde68a',
-    stroke: '#f59e0b',
-    activeStroke: '#b45309',
-    textColor: '#92400e',
-    badgeBg: '#fffbeb',
-    badgeText: '#b45309',
-    aliases: ['pune', 'shivajinagar', 'swargate', 'deccan', 'kothrud', 'camp', 'central']
+    id: 'kothrud',
+    name: 'Kothrud',
+    shortLabel: 'Kothrud',
+    category: 'South-West Prime Residential Hub',
+    path: 'M 75 275 C 130 270, 185 270, 230 285 C 235 330, 215 375, 175 405 C 120 405, 75 385, 55 350 C 45 320, 55 295, 75 275 Z',
+    center: { x: 145, y: 340 },
+    fill: '#fef9c3',
+    activeFill: '#fef08a',
+    stroke: '#eab308',
+    activeStroke: '#a16207',
+    textColor: '#854d0e',
+    badgeBg: '#fefce8',
+    badgeText: '#a16207',
+    aliases: ['kothrud', 'karve nagar', 'paud road', 'bavdhan', 'warje', 'chandani chowk']
+  },
+  {
+    id: 'shivajinagar',
+    name: 'Shivajinagar',
+    shortLabel: 'Shivajinagar',
+    category: 'Metropolitan Core & Central Hub',
+    path: 'M 230 285 C 280 275, 335 275, 375 290 C 385 335, 365 380, 325 410 C 275 415, 225 405, 175 405 C 215 375, 235 330, 230 285 Z',
+    center: { x: 280, y: 345 },
+    fill: '#ffedd5',
+    activeFill: '#fed7aa',
+    stroke: '#f97316',
+    activeStroke: '#c2410c',
+    textColor: '#9a3412',
+    badgeBg: '#fff7ed',
+    badgeText: '#c2410c',
+    aliases: ['shivajinagar', 'jm road', 'fc road', 'deccan', 'swargate', 'camp', 'pune', 'central']
   },
   {
     id: 'viman-nagar',
     name: 'Viman Nagar',
     shortLabel: 'Viman Nagar',
     category: 'North-East Airport Corridor',
-    path: 'M 260 150 C 320 135, 390 130, 460 145 C 475 180, 470 215, 450 245 C 400 240, 345 230, 295 235 C 272 205, 270 175, 260 150 Z',
-    center: { x: 365, y: 185 },
+    path: 'M 370 70 C 440 60, 515 65, 575 90 C 580 135, 565 175, 530 200 C 475 200, 420 190, 375 180 C 375 140, 375 105, 370 70 Z',
+    center: { x: 470, y: 135 },
     fill: '#e0f2fe',
     activeFill: '#bae6fd',
     stroke: '#0ea5e9',
@@ -104,31 +157,31 @@ const PUNE_ZONES_DATA: PuneZoneGeo[] = [
     textColor: '#0369a1',
     badgeBg: '#f0f9ff',
     badgeText: '#0369a1',
-    aliases: ['viman nagar', 'kalyani nagar', 'airport', 'vimannagar']
+    aliases: ['viman nagar', 'kalyani nagar', 'airport', 'tingre nagar', 'vimannagar', 'yerawada', 'koregaon park']
   },
   {
     id: 'kharadi',
     name: 'Kharadi',
     shortLabel: 'Kharadi',
-    category: 'East EON IT Corridor',
-    path: 'M 460 145 C 530 135, 600 145, 670 170 C 685 215, 675 265, 645 300 C 585 290, 525 275, 480 255 C 470 215, 475 180, 460 145 Z',
-    center: { x: 570, y: 215 },
-    fill: '#ffedd5',
-    activeFill: '#fed7aa',
-    stroke: '#f97316',
-    activeStroke: '#c2410c',
-    textColor: '#c2410c',
-    badgeBg: '#fff7ed',
-    badgeText: '#c2410c',
-    aliases: ['kharadi', 'eon', 'wtc', 'nagar road']
+    category: 'East EON IT Corridor & WTC',
+    path: 'M 575 90 C 630 110, 680 145, 700 190 C 700 235, 675 270, 630 295 C 585 285, 545 265, 515 240 C 540 200, 565 150, 575 90 Z',
+    center: { x: 615, y: 195 },
+    fill: '#fae8ff',
+    activeFill: '#f5d0fe',
+    stroke: '#d946ef',
+    activeStroke: '#a21caf',
+    textColor: '#86198f',
+    badgeBg: '#fdf4ff',
+    badgeText: '#a21caf',
+    aliases: ['kharadi', 'eon', 'wtc', 'chandan nagar', 'mundhwa', 'nagar road', 'wagholi']
   },
   {
     id: 'magarpatta',
     name: 'Magarpatta',
     shortLabel: 'Magarpatta',
     category: 'Cybercity & Township Hub',
-    path: 'M 380 255 C 430 245, 480 255, 530 270 C 535 305, 520 345, 495 375 C 450 375, 410 365, 375 350 C 395 315, 390 280, 380 255 Z',
-    center: { x: 455, y: 310 },
+    path: 'M 375 290 C 430 270, 490 265, 540 280 C 545 320, 530 360, 495 390 C 445 395, 395 385, 355 365 C 370 335, 375 310, 375 290 Z',
+    center: { x: 450, y: 330 },
     fill: '#ccfbf1',
     activeFill: '#99f6e4',
     stroke: '#14b8a6',
@@ -136,15 +189,15 @@ const PUNE_ZONES_DATA: PuneZoneGeo[] = [
     textColor: '#0f766e',
     badgeBg: '#f0fdfa',
     badgeText: '#0f766e',
-    aliases: ['magarpatta', 'cybercity', 'amanora', 'mundhwa']
+    aliases: ['magarpatta', 'cybercity', 'amanora township', 'hadapsar cybercity']
   },
   {
     id: 'hadapsar',
     name: 'Hadapsar',
     shortLabel: 'Hadapsar',
-    category: 'South-East Commercial Zone',
-    path: 'M 370 380 C 410 365, 450 375, 495 375 C 520 345, 535 305, 530 270 C 580 285, 625 310, 660 350 C 655 395, 610 430, 540 435 C 460 430, 395 410, 370 380 Z',
-    center: { x: 520, y: 380 },
+    category: 'South-East Commercial & Industrial Zone',
+    path: 'M 495 390 C 545 365, 600 355, 650 375 C 660 415, 635 445, 580 455 C 510 455, 450 445, 400 425 C 440 405, 470 395, 495 390 Z',
+    center: { x: 545, y: 415 },
     fill: '#ffe4e6',
     activeFill: '#fecdd3',
     stroke: '#f43f5e',
@@ -152,9 +205,41 @@ const PUNE_ZONES_DATA: PuneZoneGeo[] = [
     textColor: '#be123c',
     badgeBg: '#fff1f2',
     badgeText: '#be123c',
-    aliases: ['hadapsar', 'sp infocity', 'saswad', 'solapur road']
+    aliases: ['hadapsar', 'amanora', 'sasane nagar', 'sp infocity', 'saswad', 'solapur road', 'undri', 'nibm']
   }
 ];
+
+// Helper: Normalize string for fuzzy zone matching
+const normalizeStr = (s?: string) =>
+  (s || '')
+    .toLowerCase()
+    .replace(/[\s\-_,]+/g, ' ')
+    .replace(/zone/g, '')
+    .trim();
+
+// Robust Zone Matcher
+const isMatchZone = (entityZoneOrArea: string | undefined, zone: Zone): boolean => {
+  if (!entityZoneOrArea || !zone) return false;
+  const target = normalizeStr(entityZoneOrArea);
+  const zName = normalizeStr(zone.name);
+  if (!target || !zName) return false;
+
+  // Direct exact or substring match
+  if (target === zName || target.includes(zName) || zName.includes(target)) return true;
+
+  // Match against coverage area locations
+  if (zone.areaLocations) {
+    const areas = zone.areaLocations
+      .split(/[,/|•]/)
+      .map(a => normalizeStr(a))
+      .filter(Boolean);
+    if (areas.some(a => target.includes(a) || a.includes(target))) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 export const ZonesPage: React.FC = () => {
   const {
@@ -167,19 +252,21 @@ export const ZonesPage: React.FC = () => {
     confirmAction,
     setActiveTab,
     setSelectedJoiner,
+    setSelectedHotel,
+    setSelectedOrder,
     joiners,
     hotels,
-    orders,
-    isDatabaseConnected
+    orders
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [hoveredMapZone, setHoveredMapZone] = useState<string | null>(null);
   const [showRiverLayer, setShowRiverLayer] = useState(true);
+  const [zoneDetailTab, setZoneDetailTab] = useState<'joiners' | 'hotels' | 'orders'>('joiners');
 
+  // Filtered Zones List
   const filteredZones = useMemo(() => {
     return zones.filter(z => {
       const term = searchTerm.trim().toLowerCase();
@@ -191,6 +278,7 @@ export const ZonesPage: React.FC = () => {
     });
   }, [zones, searchTerm, statusFilter]);
 
+  // Active Selected Zone
   const activeZone = useMemo(() => {
     if (selectedZone && zones.some(z => String(z.id) === String(selectedZone.id))) {
       return zones.find(z => String(z.id) === String(selectedZone.id)) || selectedZone;
@@ -198,38 +286,88 @@ export const ZonesPage: React.FC = () => {
     return filteredZones[0] || zones[0] || null;
   }, [selectedZone, zones, filteredZones]);
 
-  const totalSalesAmount = orders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  // Unique Deduplicated Entities
+  const uniqueHotels = useMemo(() => deduplicateHotels(hotels), [hotels]);
+  const uniqueJoiners = useMemo(() => deduplicateJoiners(joiners), [joiners]);
+  const uniqueOrders = useMemo(() => deduplicateOrders(orders), [orders]);
 
-  const getZoneStats = (zone: Zone | null) => {
-    if (!zone) return { hotelsCount: 0, joinersCount: 0, ordersCount: 0, salesCount: 0 };
-    const zName = (zone.name || '').toLowerCase();
-    const zAreas = (zone.areaLocations || '').toLowerCase();
+  // Dynamic Zone Stats Calculator
+  const getZoneLiveStats = (zone: Zone | null) => {
+    if (!zone) {
+      return {
+        hotelsList: [],
+        joinersList: [],
+        ordersList: [],
+        hotelsCount: 0,
+        joinersCount: 0,
+        ordersCount: 0,
+        salesCount: 0,
+        deliveredOrdersCount: 0,
+        pendingOrdersCount: 0
+      };
+    }
 
-    const zHotels = hotels.filter(h => {
-      const hZone = (h.zone || '').toLowerCase();
-      return (zName && hZone === zName) || (zAreas && zAreas.includes(hZone));
+    // 1. Matched Hotels
+    const zHotels = uniqueHotels.filter(h => isMatchZone(h.zone, zone) || isMatchZone(h.address, zone));
+
+    // 2. Matched Joiners (Live real joiners assigned to this zone)
+    const zJoiners = uniqueJoiners.filter(j => isMatchZone(j.zone, zone));
+
+    // 3. Matched Orders: check order's zone, order's hotelZone, or if order's hotel belongs to this zone
+    const zHotelIds = new Set(zHotels.map(h => String(h.id || (h as any).hotelCode || h.name)));
+    const zOrders = uniqueOrders.filter(o => {
+      if (isMatchZone(o.zone, zone) || isMatchZone(o.zoneName, zone) || isMatchZone(o.hotelZone, zone)) {
+        return true;
+      }
+      if (o.hotelId && zHotelIds.has(String(o.hotelId))) return true;
+      if (o.hotelName && zHotels.some(h => normalizeStr(h.name) === normalizeStr(o.hotelName))) return true;
+      return false;
     });
 
-    const zJoiners = joiners.filter(j => {
-      const jZone = (j.zone || '').toLowerCase();
-      return (zName && jZone === zName) || (zAreas && zAreas.includes(jZone));
-    });
-
-    const zOrders = orders.filter(o => {
-      const oZone = (o.zone || '').toLowerCase();
-      return (zName && oZone === zName) || (zAreas && zAreas.includes(oZone));
-    });
-
-    const zSales = zOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+    const zSales = zOrders.reduce((sum, o) => sum + (Number(o.amount || o.totalAmount) || 0), 0);
+    const deliveredCount = zOrders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
+    const pendingCount = zOrders.filter(o => o.status === 'Pending' || o.status === 'Confirmed' || o.status === 'Accepted' || o.status === 'Out for Delivery').length;
 
     return {
-      hotelsCount: isDatabaseConnected ? zHotels.length : (zHotels.length || zone.hotelsCount || 0),
-      joinersCount: isDatabaseConnected ? zJoiners.length : (zJoiners.length || zone.joinersCount || 0),
-      ordersCount: isDatabaseConnected ? zOrders.length : (zOrders.length || zone.ordersThisMonth || 0),
-      salesCount: isDatabaseConnected ? zSales : (zSales || zone.salesThisMonth || 0)
+      hotelsList: zHotels,
+      joinersList: zJoiners,
+      ordersList: zOrders,
+      hotelsCount: zHotels.length,
+      joinersCount: zJoiners.length,
+      ordersCount: zOrders.length,
+      salesCount: zSales,
+      deliveredOrdersCount: deliveredCount,
+      pendingOrdersCount: pendingCount
     };
   };
 
+  // Top Aggregates
+  const totalSalesAmount = useMemo(() => {
+    return uniqueOrders.reduce((sum, o) => sum + (Number(o.amount || o.totalAmount) || 0), 0);
+  }, [uniqueOrders]);
+
+  const activeZonesCount = useMemo(() => {
+    return zones.filter(z => (z.status || 'Active') === 'Active').length;
+  }, [zones]);
+
+  const activeHotelsCount = useMemo(() => {
+    return uniqueHotels.filter(h => (h.status || 'Active') === 'Active').length;
+  }, [uniqueHotels]);
+
+  const activeJoinersCount = useMemo(() => {
+    return uniqueJoiners.filter(j => (j.status || 'Active') === 'Active').length;
+  }, [uniqueJoiners]);
+
+  const deliveredOrdersCount = useMemo(() => {
+    return uniqueOrders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
+  }, [uniqueOrders]);
+
+  // Selected Zone Live Data
+  const activeZoneStats = useMemo(() => {
+    return getZoneLiveStats(activeZone);
+  }, [activeZone, uniqueHotels, uniqueJoiners, uniqueOrders]);
+
+  // Map zone click handler
   const handleMapZoneClick = (geoZone: PuneZoneGeo) => {
     const found = zones.find(z => {
       const zName = (z.name || '').toLowerCase();
@@ -242,14 +380,15 @@ export const ZonesPage: React.FC = () => {
     if (found) {
       setSelectedZone(found);
     } else {
+      // Auto-focus or select if matched
       const fallbackZone: Zone = {
         id: Date.now(),
         name: geoZone.name,
         areaLocations: geoZone.category,
-        hotelsCount: 15,
-        joinersCount: 3,
-        ordersThisMonth: 120,
-        salesThisMonth: 125000,
+        hotelsCount: 0,
+        joinersCount: 0,
+        ordersThisMonth: 0,
+        salesThisMonth: 0,
         status: 'Active',
         assignedJoinersList: []
       };
@@ -271,12 +410,18 @@ export const ZonesPage: React.FC = () => {
     e.stopPropagation();
     confirmAction({
       title: 'Delete Zone',
-      message: 'Are you sure you want to delete this zone? Assigned hotels and joiners will be unlinked from this zone.',
+      message: `Are you sure you want to delete '${zoneName}'? Associated hotels and joiners will remain safe in the system.`,
       entityName: zoneName,
       confirmLabel: 'Delete Zone',
       type: 'danger',
-      onConfirm: () => deleteZone(Number(zoneId))
+      onConfirm: () => deleteZone(zoneId)
     });
+  };
+
+  const handleToggleStatus = async (e: React.MouseEvent, zone: Zone) => {
+    e.stopPropagation();
+    const newStatus: 'Active' | 'Inactive' = (zone.status || 'Active') === 'Active' ? 'Inactive' : 'Active';
+    await updateZone(zone.id, { status: newStatus });
   };
 
   const handleEditClick = (e: React.MouseEvent, zone: Zone) => {
@@ -284,90 +429,109 @@ export const ZonesPage: React.FC = () => {
     setEditingZone({ ...zone });
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingZone) return;
-    updateZone(editingZone.id, editingZone);
+    await updateZone(editingZone.id, editingZone);
     setEditingZone(null);
   };
 
-  const handleJoinerClick = (joinerName: string) => {
-    const found = joiners.find(j => (j.name || '').toLowerCase().includes(joinerName.toLowerCase()));
-    if (found) {
-      setSelectedJoiner(found);
-    }
+  const handleNavigateToJoiner = (joiner: Joiner) => {
+    setSelectedJoiner(joiner);
     setActiveTab('Hotel Joiners');
   };
 
-  const activeZoneJoiners = activeZone
-    ? joiners.filter(j => {
-        const jZone = (j.zone || '').toLowerCase();
-        const aName = (activeZone.name || '').toLowerCase();
-        const aAreas = (activeZone.areaLocations || '').toLowerCase();
-        return (aName && jZone === aName) || (aAreas && aAreas.includes(jZone));
-      })
-    : [];
+  const handleNavigateToHotel = (hotel: Hotel) => {
+    setSelectedHotel(hotel);
+    setActiveTab('Hotels');
+  };
 
-  const displayJoiners = activeZoneJoiners.length > 0
-    ? activeZoneJoiners.map(j => ({
-        name: j.name || 'Joiner',
-        hotelsCount: hotels.filter(h => (h.joiner || '').toLowerCase() === (j.name || '').toLowerCase()).length || j.totalHotels || 0,
-        phone: j.mobile || '—',
-        status: j.status || 'Active'
-      }))
-    : (isDatabaseConnected ? [] : (activeZone?.assignedJoinersList || []));
+  const handleNavigateToOrder = (order: Order) => {
+    setSelectedOrder(order);
+    setActiveTab('Orders');
+  };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-5">
-      {/* Top 6 KPI Metric Cards */}
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      {/* Top 6 KPI Metric Cards (100% Dynamic & Interactive) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-center">
-        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3 transition-all hover:shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
             <MapPin className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500">Total Zones</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{zones.length}</h3>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <h3 className="text-xl font-bold text-slate-900 leading-none">{zones.length}</h3>
+              <span className="text-[10px] text-emerald-700 font-bold truncate">({activeZonesCount} Active)</span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-sky-50/80 p-3.5 rounded-xl border border-sky-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold">
+        <div
+          onClick={() => setActiveTab('Hotels')}
+          className="bg-sky-50/80 hover:bg-sky-100/70 p-3.5 rounded-xl border border-sky-100 flex items-center gap-3 cursor-pointer transition-all hover:shadow-xs"
+          title="Click to view Hotels"
+        >
+          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500">Total Hotels</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{hotels.length}</h3>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <h3 className="text-xl font-bold text-slate-900 leading-none">{uniqueHotels.length}</h3>
+              <span className="text-[10px] text-sky-700 font-bold truncate">({activeHotelsCount} Active)</span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-orange-50/80 p-3.5 rounded-xl border border-orange-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold">
+        <div
+          onClick={() => setActiveTab('Hotel Joiners')}
+          className="bg-orange-50/80 hover:bg-orange-100/70 p-3.5 rounded-xl border border-orange-100 flex items-center gap-3 cursor-pointer transition-all hover:shadow-xs"
+          title="Click to view Hotel Joiners"
+        >
+          <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
             <Users className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500">Total Joiners</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{joiners.length}</h3>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <h3 className="text-xl font-bold text-slate-900 leading-none">{uniqueJoiners.length}</h3>
+              <span className="text-[10px] text-orange-700 font-bold truncate">({activeJoinersCount} Active)</span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-purple-50/80 p-3.5 rounded-xl border border-purple-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold">
+        <div
+          onClick={() => setActiveTab('Orders')}
+          className="bg-purple-50/80 hover:bg-purple-100/70 p-3.5 rounded-xl border border-purple-100 flex items-center gap-3 cursor-pointer transition-all hover:shadow-xs"
+          title="Click to view Orders"
+        >
+          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
             <ShoppingBag className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500">Total Orders</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{orders.length}</h3>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <h3 className="text-xl font-bold text-slate-900 leading-none">{uniqueOrders.length}</h3>
+              <span className="text-[10px] text-purple-700 font-bold truncate">({deliveredOrdersCount} Delivered)</span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-rose-50/80 p-3.5 rounded-xl border border-rose-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center font-bold">
+        <div
+          onClick={() => setActiveTab('Orders')}
+          className="bg-rose-50/80 hover:bg-rose-100/70 p-3.5 rounded-xl border border-rose-100 flex items-center gap-3 cursor-pointer transition-all hover:shadow-xs"
+          title="Click to view Orders & Sales Revenue"
+        >
+          <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500">Total Sales</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹{totalSalesAmount.toLocaleString('en-IN')}</h3>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <h3 className="text-xl font-bold text-slate-900 leading-none">₹{totalSalesAmount.toLocaleString('en-IN')}</h3>
+            </div>
           </div>
         </div>
 
@@ -381,38 +545,32 @@ export const ZonesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Full-width Zones List Table Section (No Slider) */}
+      {/* Full-width Zones List Table Section */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Zones List</h3>
-            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
+            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
               {filteredZones.length} {filteredZones.length === 1 ? 'Zone' : 'Zones'}
             </span>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <div className="relative w-full sm:w-48 shrink-0">
+            <div className="relative w-full sm:w-56 shrink-0">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search zone name or area..."
                 value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600 font-medium"
               />
             </div>
 
             <select
               value={statusFilter}
-              onChange={e => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+              onChange={e => setStatusFilter(e.target.value)}
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 font-semibold text-slate-700 cursor-pointer shrink-0"
             >
               <option value="All">Status: All</option>
               <option value="Active">Active</option>
@@ -430,20 +588,21 @@ export const ZonesPage: React.FC = () => {
 
         {/* Table View */}
         {filteredZones.length === 0 ? (
-          <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+          <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+            <MapPin className="w-8 h-8 text-slate-300 mx-auto" />
             <p className="text-xs font-semibold text-slate-700">No zones match your filter criteria.</p>
             <button
               onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('All');
               }}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
+              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer transition-colors"
             >
               Reset Filters
             </button>
           </div>
         ) : (
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
@@ -460,54 +619,79 @@ export const ZonesPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredZones.map((z, idx) => {
-                  const stats = getZoneStats(z);
+                  const stats = getZoneLiveStats(z);
                   const isSelected = activeZone && String(activeZone.id) === String(z.id);
+                  const isActive = (z.status || 'Active') === 'Active';
+
                   return (
                     <tr
                       key={z.id}
                       onClick={() => setSelectedZone(z)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
+                      className={`cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-emerald-50/90 font-semibold border-l-4 border-l-emerald-600'
+                          : 'hover:bg-slate-50/80'
                       }`}
                     >
-                      <td className="py-2.5 px-3 font-medium text-slate-500 whitespace-nowrap">{idx + 1}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">
+                      <td className="py-3 px-3 font-medium text-slate-500 whitespace-nowrap">{idx + 1}</td>
+                      <td className="py-3 px-3 font-bold text-slate-800 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <MapPin className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-700' : 'text-slate-400'}`} />
-                          <span>{z.name}</span>
+                          <span className={isSelected ? 'text-emerald-900' : 'text-slate-800'}>{z.name}</span>
                           {z.addedBy === 'Admin' && (
-                            <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold">
-                              <Shield className="w-2 h-2 text-amber-600" /> Admin
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold">
+                              <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap" title={z.areaLocations}>
+                      <td className="py-3 px-3 text-slate-600 whitespace-nowrap max-w-xs truncate" title={z.areaLocations}>
                         {z.areaLocations || '—'}
                       </td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-800 whitespace-nowrap">{stats.hotelsCount}</td>
-                      <td className="py-2.5 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">{stats.joinersCount}</td>
-                      <td className="py-2.5 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">{stats.ordersCount}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">₹{stats.salesCount.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          (z.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {z.status || 'Active'}
+                      <td className="py-3 px-3 text-center font-bold text-slate-800 whitespace-nowrap">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200 text-xs">
+                          {stats.hotelsCount}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-orange-50 text-orange-800 border border-orange-200 text-xs">
+                          {stats.joinersCount}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 text-xs">
+                          {stats.ordersCount}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                        ₹{stats.salesCount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={e => handleToggleStatus(e, z)}
+                          title="Click to toggle status"
+                          className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                              : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                          }`}
+                        >
+                          {isActive ? '● Active' : '○ Inactive'}
+                        </button>
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={e => handleEditClick(e, z)}
-                            className="p-1 text-slate-500 hover:text-emerald-700 rounded hover:bg-slate-100 cursor-pointer"
+                            className="p-1 text-slate-500 hover:text-emerald-700 rounded-md hover:bg-emerald-50 cursor-pointer transition-colors"
                             title="Edit Zone"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={e => handleDelete(e, z.id, z.name)}
-                            className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
+                            className="p-1 text-slate-500 hover:text-rose-600 rounded-md hover:bg-rose-50 cursor-pointer transition-colors"
                             title="Delete Zone"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -523,38 +707,39 @@ export const ZonesPage: React.FC = () => {
         )}
       </div>
 
-      {/* Selected Zone Details & Interactive Pune Map Section (Below Table) */}
+      {/* Selected Zone Details & Interactive Pune Map Section */}
       {activeZone && (
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-3">
+          {/* Header Banner for Selected Zone */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold border-2 border-emerald-600 shadow-xs shrink-0">
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-800">{activeZone.name}</h3>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                  <h3 className="font-bold text-lg text-slate-900">{activeZone.name}</h3>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
                     (activeZone.status || 'Active') === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                   }`}>
                     {activeZone.status || 'Active'}
                   </span>
                   {activeZone.addedBy === 'Admin' && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                      <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
+                      <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin Added
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500">{activeZone.areaLocations || 'Pune Supply Zone'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{activeZone.areaLocations || 'Pune Operational Supply Zone'}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={e => handleEditClick(e, activeZone)}
                 className="px-3.5 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
               >
-                <Edit className="w-3 h-3" /> Edit Zone
+                <Edit className="w-3.5 h-3.5" /> Edit Zone
               </button>
               <button
                 onClick={e => handleDelete(e, activeZone.id, activeZone.name)}
@@ -567,32 +752,53 @@ export const ZonesPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Left: Zone Stats, Zone Admin, and Assigned Joiners */}
+            {/* Left: Zone Metrics & Deep-Dive Tabs (Col 6) */}
             <div className="lg:col-span-6 space-y-4">
-              {/* Zone Stats Grid */}
-              {(() => {
-                const activeStats = getZoneStats(activeZone);
-                return (
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    <div className="bg-sky-50 p-2.5 rounded-lg border border-sky-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Hotels</p>
-                      <p className="font-bold text-sky-900 text-base">{activeStats.hotelsCount}</p>
-                    </div>
-                    <div className="bg-orange-50 p-2.5 rounded-lg border border-orange-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Joiners</p>
-                      <p className="font-bold text-orange-900 text-base">{activeStats.joinersCount}</p>
-                    </div>
-                    <div className="bg-purple-50 p-2.5 rounded-lg border border-purple-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Orders</p>
-                      <p className="font-bold text-purple-900 text-base">{activeStats.ordersCount}</p>
-                    </div>
-                    <div className="bg-rose-50 p-2.5 rounded-lg border border-rose-100">
-                      <p className="text-[10px] text-slate-400 font-medium">Total Sales</p>
-                      <p className="font-bold text-rose-900 text-base">₹{activeStats.salesCount.toLocaleString('en-IN')}</p>
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Zone Metrics 4-Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
+                <div
+                  onClick={() => setZoneDetailTab('hotels')}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    zoneDetailTab === 'hotels' ? 'bg-sky-100/70 border-sky-300 ring-2 ring-sky-400' : 'bg-sky-50 border-sky-100 hover:bg-sky-100/50'
+                  }`}
+                >
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <Building2 className="w-3 h-3 text-sky-600" /> Hotels
+                  </p>
+                  <p className="font-bold text-sky-900 text-lg mt-0.5">{activeZoneStats.hotelsCount}</p>
+                </div>
+
+                <div
+                  onClick={() => setZoneDetailTab('joiners')}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    zoneDetailTab === 'joiners' ? 'bg-orange-100/70 border-orange-300 ring-2 ring-orange-400' : 'bg-orange-50 border-orange-100 hover:bg-orange-100/50'
+                  }`}
+                >
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <Users className="w-3 h-3 text-orange-600" /> Joiners
+                  </p>
+                  <p className="font-bold text-orange-900 text-lg mt-0.5">{activeZoneStats.joinersCount}</p>
+                </div>
+
+                <div
+                  onClick={() => setZoneDetailTab('orders')}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    zoneDetailTab === 'orders' ? 'bg-purple-100/70 border-purple-300 ring-2 ring-purple-400' : 'bg-purple-50 border-purple-100 hover:bg-purple-100/50'
+                  }`}
+                >
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <ShoppingBag className="w-3 h-3 text-purple-600" /> Orders
+                  </p>
+                  <p className="font-bold text-purple-900 text-lg mt-0.5">{activeZoneStats.ordersCount}</p>
+                </div>
+
+                <div className="bg-rose-50 p-3 rounded-xl border border-rose-100">
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <IndianRupee className="w-3 h-3 text-rose-600" /> Total Sales
+                  </p>
+                  <p className="font-bold text-rose-900 text-lg mt-0.5">₹{activeZoneStats.salesCount.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
 
               {/* Assigned Zone Admin Card */}
               {(() => {
@@ -611,19 +817,19 @@ export const ZonesPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setActiveTab('Settings')}
-                        className="text-[10.5px] text-emerald-800 font-bold hover:underline cursor-pointer"
+                        className="text-[10.5px] text-emerald-800 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
                       >
-                        Manage in Settings →
+                        Manage in Settings <ExternalLink className="w-2.5 h-2.5" />
                       </button>
                     </div>
 
                     {zoneAdmin ? (
-                      <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-emerald-100 text-xs">
+                      <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-emerald-100 text-xs">
                         <div>
                           <p className="font-bold text-slate-900">{zoneAdmin.name}</p>
                           <p className="text-[11px] text-slate-500">{zoneAdmin.email} • {zoneAdmin.phone}</p>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
+                        <span className="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
                           {zoneAdmin.role}
                         </span>
                       </div>
@@ -643,56 +849,197 @@ export const ZonesPage: React.FC = () => {
                 );
               })()}
 
-              {/* Assigned Joiners List */}
-              <div className="space-y-2 pt-1 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-xs text-slate-800">Assigned Field Joiners ({displayJoiners.length})</h4>
+              {/* Dynamic Tabs Header */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+                    <button
+                      onClick={() => setZoneDetailTab('joiners')}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        zoneDetailTab === 'joiners'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Field Joiners ({activeZoneStats.joinersList.length})
+                    </button>
+                    <button
+                      onClick={() => setZoneDetailTab('hotels')}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        zoneDetailTab === 'hotels'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Hotels ({activeZoneStats.hotelsList.length})
+                    </button>
+                    <button
+                      onClick={() => setZoneDetailTab('orders')}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        zoneDetailTab === 'orders'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Orders ({activeZoneStats.ordersList.length})
+                    </button>
+                  </div>
+
                   <button
-                    onClick={() => setActiveTab('Hotel Joiners')}
-                    className="text-[11px] text-blue-600 font-semibold hover:underline cursor-pointer"
+                    onClick={() => {
+                      if (zoneDetailTab === 'joiners') setActiveTab('Hotel Joiners');
+                      else if (zoneDetailTab === 'hotels') setActiveTab('Hotels');
+                      else setActiveTab('Orders');
+                    }}
+                    className="text-[11px] text-blue-600 font-semibold hover:underline cursor-pointer flex items-center gap-0.5"
                   >
-                    View All
+                    View in {zoneDetailTab === 'joiners' ? 'Joiners' : zoneDetailTab === 'hotels' ? 'Hotels' : 'Orders'} →
                   </button>
                 </div>
 
-                <div className="space-y-1.5 text-xs">
-                  {displayJoiners.length === 0 ? (
-                    <div className="text-center py-5 bg-slate-50 rounded-lg border border-slate-100 text-slate-400 text-xs">
-                      No joiners assigned to this zone yet.
-                    </div>
-                  ) : (
-                    displayJoiners.map((j, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleJoinerClick(j.name)}
-                        className="flex items-center justify-between p-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-100 cursor-pointer transition-colors"
-                        title={`Click to view ${j.name}'s profile`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-400">{idx + 1}</span>
-                          <span className="font-bold text-slate-800">{j.name}</span>
-                          <span className="text-slate-400 text-[11px]">({j.hotelsCount} Hotels)</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-slate-600 flex items-center gap-1 text-[11px]">
-                            <Phone className="w-3 h-3 text-slate-400" /> {j.phone}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {j.status}
-                          </span>
-                        </div>
+                {/* Tab 1: Assigned Field Joiners */}
+                {zoneDetailTab === 'joiners' && (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {activeZoneStats.joinersList.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-xs">
+                        <Users className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                        No joiners assigned to {activeZone.name} yet.
                       </div>
-                    ))
-                  )}
-                </div>
+                    ) : (
+                      activeZoneStats.joinersList.map((j, idx) => {
+                        const jHotelsCount = hotels.filter(h =>
+                          (h.joiner || '').toLowerCase() === (j.name || '').toLowerCase() ||
+                          (h.mobile || '').includes(j.mobile || '')
+                        ).length;
+
+                        return (
+                          <div
+                            key={j.id || idx}
+                            onClick={() => handleNavigateToJoiner(j)}
+                            className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-emerald-50/60 rounded-xl border border-slate-100 cursor-pointer transition-colors"
+                            title={`Click to view ${j.name}'s profile`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-bold text-slate-400 text-xs w-4">{idx + 1}</span>
+                              <div>
+                                <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                  {j.name}
+                                  <span className="text-[10px] text-slate-500 font-medium">({j.joinerCode || 'JN'})</span>
+                                </p>
+                                <p className="text-[10.5px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Phone className="w-2.5 h-2.5 text-slate-400" /> {j.mobile || j.phone || '—'} • {jHotelsCount} Hotels
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-800 font-bold text-xs">
+                                ₹{(j.totalEarnings || j.commissionEarned || 0).toLocaleString('en-IN')}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                {j.status || 'Active'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 2: Registered Hotels */}
+                {zoneDetailTab === 'hotels' && (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {activeZoneStats.hotelsList.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-xs">
+                        <Store className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                        No hotels registered in {activeZone.name} yet.
+                      </div>
+                    ) : (
+                      activeZoneStats.hotelsList.map((h, idx) => (
+                        <div
+                          key={h.id || idx}
+                          onClick={() => handleNavigateToHotel(h)}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-sky-50/60 rounded-xl border border-slate-100 cursor-pointer transition-colors"
+                          title={`Click to view ${h.name}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-slate-400 text-xs w-4">{idx + 1}</span>
+                            <div>
+                              <p className="font-bold text-slate-800 text-xs">{h.name}</p>
+                              <p className="text-[10.5px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Phone className="w-2.5 h-2.5 text-slate-400" /> {h.mobile || h.phone || '—'}
+                                {h.joiner && <span className="text-emerald-700 font-semibold">• Joiner: {h.joiner}</span>}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">
+                              {h.totalOrders || 0} Orders
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                              {h.status || 'Active'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 3: Recent Zone Orders */}
+                {zoneDetailTab === 'orders' && (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {activeZoneStats.ordersList.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-xs">
+                        <ShoppingBag className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                        No orders recorded from {activeZone.name} yet.
+                      </div>
+                    ) : (
+                      activeZoneStats.ordersList.slice(0, 10).map((o, idx) => (
+                        <div
+                          key={o.id || o.orderId || idx}
+                          onClick={() => handleNavigateToOrder(o)}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-purple-50/60 rounded-xl border border-slate-100 cursor-pointer transition-colors"
+                          title={`Click to view Order #${o.orderId || o.id}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-slate-400 text-xs w-4">{idx + 1}</span>
+                            <div>
+                              <p className="font-bold text-slate-800 text-xs">
+                                #{o.orderId || o.id} • <span className="font-semibold text-slate-600">{o.hotelName || 'Hotel'}</span>
+                              </p>
+                              <p className="text-[10.5px] text-slate-500 mt-0.5">
+                                {o.date || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : 'Recent')} • {o.items?.length || 1} items
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-xs">
+                              ₹{Number(o.amount || o.totalAmount || 0).toLocaleString('en-IN')}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              o.status === 'Delivered'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : o.status === 'Out for Delivery'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {o.status || 'Active'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Right: Zone Map - Pune Interactive Geo Canvas */}
-            <div className="lg:col-span-6 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+            {/* Right: Zone Map - Pune Interactive Geo Canvas (Col 6) */}
+            <div className="lg:col-span-6 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs">
                     <Compass className="w-4 h-4" />
                   </div>
                   <div>
@@ -709,15 +1056,15 @@ export const ZonesPage: React.FC = () => {
                         ? 'bg-sky-50 text-sky-700 border-sky-200'
                         : 'bg-slate-50 text-slate-500 border-slate-200'
                     }`}
-                    title="Toggle Mula-Mutha River"
+                    title="Toggle Mula-Mutha River Layer"
                   >
-                    🌊 River
+                    🌊 Mula-Mutha River
                   </button>
                 </div>
               </div>
 
               {/* Zone Chips Bar */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
                 {PUNE_ZONES_DATA.map(gz => {
                   const isSelected = isGeoZoneActive(gz);
                   return (
@@ -737,10 +1084,10 @@ export const ZonesPage: React.FC = () => {
               </div>
 
               {/* Vector SVG Map */}
-              <div className="h-64 bg-white rounded-xl overflow-hidden relative border border-slate-200 shadow-inner flex items-center justify-center select-none">
+              <div className="h-72 bg-white rounded-xl overflow-hidden relative border border-slate-200 shadow-inner flex items-center justify-center select-none">
                 <svg
                   className="w-full h-full cursor-pointer"
-                  viewBox="0 0 720 460"
+                  viewBox="0 0 740 480"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
                 >
@@ -750,27 +1097,27 @@ export const ZonesPage: React.FC = () => {
                     </pattern>
                   </defs>
 
-                  <rect width="720" height="460" fill="#f8fafc" />
-                  <rect width="720" height="460" fill="url(#pune-grid)" />
+                  <rect width="740" height="480" fill="#f8fafc" />
+                  <rect width="740" height="480" fill="url(#pune-grid)" />
 
-                  {/* City Boundary */}
+                  {/* Outer Pune Boundary */}
                   <path
-                    d="M 30 30 C 120 10, 240 15, 340 30 C 470 50, 600 80, 690 140 C 715 220, 700 320, 670 380 C 620 440, 520 455, 420 450 C 330 440, 200 420, 130 360 C 60 300, 30 200, 30 110 Z"
+                    d="M 25 30 C 130 10, 260 15, 360 30 C 500 50, 630 75, 715 135 C 735 220, 720 330, 680 400 C 630 460, 520 475, 420 470 C 320 460, 190 435, 120 375 C 50 310, 20 200, 25 100 Z"
                     fill="none"
                     stroke="#cbd5e1"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
 
-                  {/* River Layer */}
+                  {/* River Layer (Mula-Mutha) */}
                   {showRiverLayer && (
                     <path
-                      d="M 60 170 C 120 190, 180 220, 240 225 C 300 230, 360 215, 430 220 C 500 225, 580 250, 680 270"
+                      d="M 50 175 C 120 195, 190 225, 255 230 C 315 235, 375 220, 445 225 C 515 230, 600 255, 700 275"
                       stroke="#38bdf8"
-                      strokeWidth="6"
+                      strokeWidth="7"
                       strokeLinecap="round"
                       fill="none"
-                      opacity="0.7"
+                      opacity="0.75"
                     />
                   )}
 
@@ -788,9 +1135,9 @@ export const ZonesPage: React.FC = () => {
                       >
                         <path
                           d={gz.path}
-                          fill={isSelected ? gz.activeFill : gz.fill}
-                          stroke={isSelected ? gz.activeStroke : gz.stroke}
-                          strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 1.5}
+                          fill={isSelected ? gz.activeFill : isHovered ? gz.activeFill : gz.fill}
+                          stroke={isSelected ? gz.activeStroke : isHovered ? gz.activeStroke : gz.stroke}
+                          strokeWidth={isSelected ? 3.5 : isHovered ? 2.5 : 1.5}
                           className="transition-all"
                         />
                         <text
@@ -798,9 +1145,9 @@ export const ZonesPage: React.FC = () => {
                           y={gz.center.y}
                           textAnchor="middle"
                           fill={gz.textColor}
-                          fontSize="13"
+                          fontSize="12.5"
                           fontWeight={isSelected ? 'bold' : '600'}
-                          className="pointer-events-none select-none"
+                          className="pointer-events-none select-none drop-shadow-xs"
                         >
                           {gz.shortLabel}
                         </text>
@@ -819,7 +1166,7 @@ export const ZonesPage: React.FC = () => {
         <div>
           <h3 className="font-extrabold text-lg">Together We Grow</h3>
           <p className="text-xs text-emerald-100 mt-0.5">
-            Connecting Hotels with Fresh Produce • More Orders • Stronger Partnerships • A Healthier Tomorrow
+            Connecting Pune Hotels with Fresh Farm Produce • Reliable Fast Supply • Stronger Partnerships • A Healthier Tomorrow
           </p>
         </div>
         <span className="text-3xl">🧺🥬🥕</span>
@@ -855,18 +1202,18 @@ export const ZonesPage: React.FC = () => {
                   required
                   value={editingZone.name || ''}
                   onChange={e => setEditingZone({ ...editingZone, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Area / Locations</label>
+                <label className="block font-semibold text-slate-700 mb-1">Area / Locations Covered</label>
                 <input
                   type="text"
                   required
                   value={editingZone.areaLocations || ''}
                   onChange={e => setEditingZone({ ...editingZone, areaLocations: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium"
                 />
               </div>
 
@@ -875,7 +1222,7 @@ export const ZonesPage: React.FC = () => {
                 <select
                   value={editingZone.status || 'Active'}
                   onChange={e => setEditingZone({ ...editingZone, status: e.target.value as 'Active' | 'Inactive' })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-700"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-semibold text-slate-700"
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>

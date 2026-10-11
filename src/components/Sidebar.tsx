@@ -24,20 +24,24 @@ export const Sidebar: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    orders,
     notifications,
     logoutAdmin,
     isMobileMenuOpen,
-    setIsMobileMenuOpen
+    setIsMobileMenuOpen,
+    adminProfile
   } = useApp();
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const pendingOrdersCount = orders ? orders.filter(o => o.status === 'Pending' || (o as any).orderStatus === 'pending' || (o as any).orderStatus === 'Pending').length : 0;
+  const isSuperAdmin = !adminProfile?.role || adminProfile.role.toLowerCase().includes('super') || adminProfile.role.toLowerCase().includes('owner');
 
   const menuItems = [
     { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'Zones', label: 'Zones', icon: MapPin },
     { id: 'Hotel Joiners', label: 'Hotel Joiners', icon: Users },
     { id: 'Hotels', label: 'Hotels', icon: Building2 },
-    { id: 'Orders', label: 'Orders', icon: ShoppingBag },
+    { id: 'Orders', label: 'Orders', icon: ShoppingBag, badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined },
     { id: 'Delivery Drivers', label: 'Delivery Drivers', icon: Truck },
     { id: 'Products / Inventory', label: 'Products / Inventory', icon: Package },
     { id: 'B2C Catalog', label: 'B2C Catalog', icon: ShoppingBag, tag: 'Retail' },
@@ -45,13 +49,20 @@ export const Sidebar: React.FC = () => {
     { id: 'Payments', label: 'Payments', icon: CreditCard },
     { id: 'Reports', label: 'Reports', icon: BarChart3 },
     { id: 'Notifications', label: 'Notifications', icon: Bell, badge: unreadCount > 0 ? unreadCount : undefined },
-    { id: 'Admins', label: 'Admin Management', icon: ShieldCheck, tag: 'Super' },
+    { id: 'Admins', label: 'Admin Management', icon: ShieldCheck, tag: 'Super', superAdminOnly: true },
     { id: 'Settings', label: 'Settings', icon: Settings },
     { id: 'Profile', label: 'My Profile', icon: User },
-    { id: 'Customer Mobile App', label: 'Customer B2C App', icon: Smartphone, tag: 'B2C' },
-    { id: 'Mobile App', label: 'Joiner Mobile App', icon: Smartphone, tag: 'B2B' },
+    { id: 'Customer Mobile App', label: 'Customer B2C App', icon: Smartphone, tag: 'B2C', superAdminOnly: true },
+    { id: 'Mobile App', label: 'Joiner Mobile App', icon: Smartphone, tag: 'B2B', superAdminOnly: true },
     { id: 'Logout', label: 'Logout', icon: LogOut }
   ];
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.superAdminOnly && !isSuperAdmin) {
+      return false;
+    }
+    return true;
+  });
 
   const handleItemClick = (id: string) => {
     setIsMobileMenuOpen(false);
@@ -111,7 +122,7 @@ export const Sidebar: React.FC = () => {
 
           {/* Navigation Menu */}
           <nav className="p-3 space-y-1.5">
-            {menuItems.map(item => {
+            {visibleMenuItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id || (item.id === 'Dashboard' && activeTab === 'Dashboard');
               return (

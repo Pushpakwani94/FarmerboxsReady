@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
 
         // Load local dev server with mobile joiner mode
-        webView.loadUrl("http://192.168.1.21:8080/?app=joiner");
+        webView.loadUrl("http://192.168.1.8:8080/?app=joiner");
     }
 
     @Override
@@ -136,21 +136,25 @@ if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 
 Write-Host "6. Generating release keystore and signing..."
 $keystore = "$workDir\debug.keystore"
+if (Test-Path $keystore) { Remove-Item $keystore }
 & keytool -genkeypair -v -keystore $keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=FarmerBox, OU=Mobile, O=FarmerBox, L=Pune, ST=Maharashtra, C=IN"
 
-$finalApk = "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\public\farmerbox-joiner-v2.4.1.apk"
+$finalApk = "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\public\FarmerBox.apk"
 & cmd.exe /c "$apksigner sign --ks `"$keystore`" --ks-pass pass:android --key-pass pass:android --out `"$finalApk`" `"$workDir\bin\aligned.apk`""
 if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
 
-Write-Host "=== APK Successfully Built ==="
+Write-Host "=== Ultra-Lightweight APK Successfully Built ==="
 Get-Item $finalApk | Select-Object Name, Length, LastWriteTime
 
-Write-Host "=== Installing Directly to Connected Device ==="
-& $adb -s 95c19714 install -r -d -t $finalApk
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "=== Launching FarmerBox Joiner on Device ==="
-    & $adb -s 95c19714 shell am start -n com.farmerbox.joiner/.MainActivity
-    Write-Host "SUCCESS: FarmerBox Joiner App is now installed and running on physical device!"
+Write-Host "=== Checking Connected Device & Installing via USB ==="
+$devices = & $adb devices | Select-String "device$"
+if ($devices) {
+    & $adb install -r -d -t $finalApk
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "=== Launching FarmerBox Joiner on Device ==="
+        & $adb shell am start -n com.farmerbox.joiner/.MainActivity
+        Write-Host "SUCCESS: FarmerBox Joiner App is installed and running on physical device!"
+    }
 } else {
-    Write-Host "ADB install had an error, code: $LASTEXITCODE"
+    Write-Host "NOTE: Please enable USB Debugging on your phone to install directly via ADB."
 }

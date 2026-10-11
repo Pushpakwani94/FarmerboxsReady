@@ -1,707 +1,1303 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp, deduplicateOrders } from '../context/AppContext';
 import {
   FileText,
-  Hourglass,
   CheckCircle2,
   Truck,
   Package,
-  XCircle,
-  Plus,
   Search,
   Eye,
   Download,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Calendar,
-  X,
   Phone,
   MapPin,
-  Check,
   Shield,
   Trash2,
-  Sparkles
+  Sparkles,
+  ShoppingBag,
+  Bell,
+  Check,
+  X,
+  Clock,
+  IndianRupee,
+  Smartphone,
+  Filter,
+  RefreshCw,
+  Coins,
+  AlertCircle,
+  Leaf,
+  Printer,
+  CheckSquare,
+  Square,
+  Building2,
+  User,
+  ExternalLink
 } from 'lucide-react';
-import type { Order } from '../types';
 import { AssignOrderModal } from '../components/Modals/AssignOrderModal';
+import { ProduceItemInspectModal, type ProduceItemInspectionData } from '../components/Modals/ProduceItemInspectModal';
 import { resolveProductImage } from '../utils/productImages';
+import type { OrderStatus, Order } from '../types';
 
 export const OrdersPage: React.FC = () => {
   const {
     orders,
-    selectedOrder,
-    setSelectedOrder,
     zones,
+    hotels,
     joiners,
     drivers,
-    hotels,
-    products,
-    setActiveTab,
-    setSelectedHotel,
-    isDatabaseConnected,
-    addOrder,
     deleteOrder,
     confirmAction,
     updateOrderStatus,
+    assignDriverToOrder,
     acceptOrder,
-    assignDriverToOrder
+    approveDelivery,
+    rejectDelivery,
+    setSelectedOrder,
+    setIsOrderDetailModalOpen,
+    setActiveTab,
+    newOrderAlert,
+    dismissNewOrderAlert,
+    simulateMultiMobileOrders
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedZone, setSelectedZone] = useState('All Zones');
-  const [selectedHotelFilter, setSelectedHotelFilter] = useState('All Hotels');
-  const [selectedJoinerFilter, setSelectedJoinerFilter] = useState('All Joiners');
-  const [selectedDriverFilter, setSelectedDriverFilter] = useState('All Drivers');
-  const [statusFilter, setStatusFilter] = useState('All Status');
-  const [paymentFilter, setPaymentFilter] = useState('All Payments');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const uniqueOrders = useMemo(() => deduplicateOrders(orders), [orders]);
+
+  // Filters State
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('All');
+  const [selectedHotelFilter, setSelectedHotelFilter] = useState<string>('All');
+  const [selectedJoinerFilter, setSelectedJoinerFilter] = useState<string>('All');
+  const [sourceFilter, setSourceFilter] = useState<'All' | 'Mobile' | 'Web'>('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [paymentFilter, setPaymentFilter] = useState<string>('All');
+  const [dateFilter, setDateFilter] = useState<string>('All');
+  const [customDate, setCustomDate] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // Bulk Selection & Inspection State
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [showTimeline, setShowTimeline] = useState(false);
-  const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false);
+  const [inspectProduceData, setInspectProduceData] = useState<ProduceItemInspectionData | null>(null);
+  const [verifiedItemIds, setVerifiedItemIds] = useState<Record<string, boolean>>({});
+
+  // Pagination & Display State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<string[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignModalOrderId, setAssignModalOrderId] = useState<string | undefined>(undefined);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationToast, setSimulationToast] = useState<string | null>(null);
 
-  // New Order Form state
-  const [newHotelName, setNewHotelName] = useState(hotels[0]?.name || 'Hotel Maharaja Executive');
-  const [newPaymentMode, setNewPaymentMode] = useState<'Online' | 'COD'>('Online');
-  const [newDriver, setNewDriver] = useState(drivers[0]?.name || 'Ramesh Pawar');
-  const defaultItems = [
-    { id: 1, productName: 'Fresh Potatoes (Jyoti Special)', qty: 40, unit: 'KG', price: 30, total: 1200 },
-    { id: 2, productName: 'Crisp Green Capsicum', qty: 20, unit: 'KG', price: 60, total: 1200 },
-    { id: 3, productName: 'Fresh Ginger & Garlic Paste Pack', qty: 10, unit: 'KG', price: 80, total: 800 }
-  ];
-  const [newOrderItems, setNewOrderItems] = useState(defaultItems);
-  const [selectedCatalogProduct, setSelectedCatalogProduct] = useState('');
+  // Helper: Detect if order was placed via Mobile device / Joiner mobile app
+  const isOrderFromMobile = (ord: Order): boolean => {
+    const src = String(ord.orderSource || '').toLowerCase();
+    const added = String(ord.addedBy || '').toLowerCase();
+    const created = String(ord.createdBy || '').toLowerCase();
+    return (
+      src.includes('mobile') ||
+      src.includes('joiner') ||
+      src.includes('app') ||
+      added.includes('mobile') ||
+      added.includes('joiner') ||
+      created.includes('joiner') ||
+      Boolean(ord.clientOrderId) ||
+      Boolean((ord as any).isMobile) ||
+      Boolean((ord as any).deviceInfo)
+    );
+  };
 
-  const filteredOrders = orders.filter(o => {
-    const searchLower = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      !searchLower ||
-      (o.hotelName || '').toLowerCase().includes(searchLower) ||
-      (o.id || '').toLowerCase().includes(searchLower) ||
-      (o.orderId || '').toLowerCase().includes(searchLower) ||
-      (o.joiner || '').toLowerCase().includes(searchLower) ||
-      (o.driver || '').toLowerCase().includes(searchLower) ||
-      (o.zone || '').toLowerCase().includes(searchLower);
+  // Helper to resolve Partner Name
+  const getJoinerNameForOrder = (ord: Order): string => {
+    if (ord.partnerName && ord.partnerName !== 'Direct Partner' && ord.partnerName !== 'Admin') return ord.partnerName;
+    if (ord.joiner && ord.joiner !== 'Direct Partner' && ord.joiner !== 'Admin' && ord.joiner !== '—') return ord.joiner;
 
-    const cleanOrdZone = (o.zone || '').trim().toLowerCase().replace(' zone', '');
-    const cleanFilterZone = selectedZone.trim().toLowerCase().replace(' zone', '');
-    const matchesZone = selectedZone === 'All Zones' || cleanOrdZone === cleanFilterZone || cleanOrdZone.includes(cleanFilterZone) || cleanFilterZone.includes(cleanOrdZone);
+    const matchedJoiner = joiners.find(j => 
+      (ord.partnerId && String(j.id) === String(ord.partnerId)) ||
+      (ord.joinerId && String(j.id) === String(ord.joinerId)) ||
+      (ord.joinedBy && String(j.id) === String(ord.joinedBy))
+    );
+    if (matchedJoiner?.name) return matchedJoiner.name;
 
-    const matchesHotel = selectedHotelFilter === 'All Hotels' || (o.hotelName || '').trim().toLowerCase() === selectedHotelFilter.trim().toLowerCase();
-    const matchesJoiner = selectedJoinerFilter === 'All Joiners' || (o.joiner || '').trim().toLowerCase() === selectedJoinerFilter.trim().toLowerCase();
-    const matchesDriver = selectedDriverFilter === 'All Drivers' || (o.driver || '').trim().toLowerCase() === selectedDriverFilter.trim().toLowerCase();
-    const matchesStatus = statusFilter === 'All Status' || (o.status || '').trim().toLowerCase() === statusFilter.trim().toLowerCase();
+    return ord.joiner || 'Rahul Patil';
+  };
 
-    const ordPayment = (o.paymentMode || '').toLowerCase();
-    const filterPayment = paymentFilter.toLowerCase();
-    const matchesPayment = paymentFilter === 'All Payments' || ordPayment.includes(filterPayment) || filterPayment.includes(ordPayment);
+  // Helper to resolve Customer / Hotel Name
+  const getCustomerNameForOrder = (ord: Order): string => {
+    return ord.customerName || ord.hotelName || 'Partner Hotel';
+  };
 
-    return matchesSearch && matchesZone && matchesHotel && matchesJoiner && matchesDriver && matchesStatus && matchesPayment;
-  });
+  // Mobile Orders Count
+  const mobileOrdersCount = useMemo(() => {
+    return uniqueOrders.filter(o => isOrderFromMobile(o)).length;
+  }, [uniqueOrders]);
 
-  const totalFiltered = filteredOrders.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  // Hotel Breakdown List
+  const allHotelNames = useMemo(() => {
+    const list = new Set<string>();
+    hotels.forEach(h => { if (h.name) list.add(h.name); });
+    uniqueOrders.forEach(o => {
+      const hName = getCustomerNameForOrder(o);
+      if (hName) list.add(hName);
+    });
+    return Array.from(list).sort();
+  }, [hotels, uniqueOrders]);
+
+  // Joiner Breakdown List
+  const allJoinerNames = useMemo(() => {
+    const list = new Set<string>();
+    joiners.forEach(j => { if (j.name) list.add(j.name); });
+    uniqueOrders.forEach(o => {
+      const jName = getJoinerNameForOrder(o);
+      if (jName) list.add(jName);
+    });
+    return Array.from(list).sort();
+  }, [joiners, uniqueOrders]);
+
+  // Zone Breakdown List
+  const allZoneNames = useMemo(() => {
+    const list = new Set<string>();
+    zones.forEach(z => { if (z.name) list.add(z.name); });
+    uniqueOrders.forEach(o => {
+      const zName = o.zoneName || o.zone;
+      if (zName) list.add(zName);
+    });
+    return Array.from(list).sort();
+  }, [zones, uniqueOrders]);
+
+  // Zone Metrics
+  const zoneStats = useMemo(() => {
+    const map = new Map<string, { count: number; revenue: number }>();
+    uniqueOrders.forEach(o => {
+      const zName = o.zoneName || o.zone || 'Kharadi';
+      const existing = map.get(zName) || { count: 0, revenue: 0 };
+      map.set(zName, {
+        count: existing.count + 1,
+        revenue: existing.revenue + (Number(o.amount || o.totalAmount) || 0)
+      });
+    });
+    return map;
+  }, [uniqueOrders]);
+
+  // Metrics Bar
+  const metrics = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    let todayOrdersCount = 0;
+    let pendingCount = 0;
+    let acceptedCount = 0;
+    let outForDeliveryCount = 0;
+    let deliveredCount = 0;
+    let cancelledCount = 0;
+    let todayRevenue = 0;
+    let pendingCommission = 0;
+    let releasedCommission = 0;
+
+    uniqueOrders.forEach(o => {
+      const isToday = o.date === 'Today' || o.date === todayStr || (o.createdAt && String(o.createdAt).includes(todayIso));
+      const amount = Number(o.amount || o.totalAmount || o.subtotal || 0);
+      const st = String(o.status || o.orderStatus || '').toLowerCase();
+
+      if (isToday) {
+        todayOrdersCount += 1;
+        todayRevenue += amount;
+      }
+
+      if (st === 'pending') {
+        pendingCount += 1;
+      } else if (st === 'accepted' || st === 'confirmed' || st === 'preparing') {
+        acceptedCount += 1;
+      } else if (st === 'out for delivery') {
+        outForDeliveryCount += 1;
+      } else if (st === 'delivered') {
+        deliveredCount += 1;
+        if (o.adminApproved || o.commissionStatus === 'credited') {
+          releasedCommission += Number(o.commissionAmount || 100);
+        } else {
+          pendingCommission += 100;
+        }
+      } else if (st === 'cancelled' || st === 'rejected') {
+        cancelledCount += 1;
+      }
+    });
+
+    return {
+      todayOrdersCount,
+      pendingCount,
+      acceptedCount,
+      outForDeliveryCount,
+      deliveredCount,
+      cancelledCount,
+      todayRevenue,
+      pendingCommission,
+      releasedCommission
+    };
+  }, [uniqueOrders]);
+
+  // Filtering Logic
+  const filteredOrders = useMemo(() => {
+    return uniqueOrders.filter(o => {
+      // 1. Zone Filter
+      if (selectedZoneFilter !== 'All') {
+        const orderZone = (o.zoneName || o.zone || '').toLowerCase().replace(' zone', '');
+        const targetZone = selectedZoneFilter.toLowerCase().replace(' zone', '');
+        if (orderZone !== targetZone && !orderZone.includes(targetZone)) {
+          return false;
+        }
+      }
+
+      // 2. Source Filter (Mobile Device vs Web Admin)
+      if (sourceFilter === 'Mobile' && !isOrderFromMobile(o)) return false;
+      if (sourceFilter === 'Web' && isOrderFromMobile(o)) return false;
+
+      // 3. Hotel Filter
+      if (selectedHotelFilter !== 'All') {
+        const orderHotel = getCustomerNameForOrder(o).toLowerCase();
+        const targetHotel = selectedHotelFilter.toLowerCase();
+        if (orderHotel !== targetHotel && !orderHotel.includes(targetHotel)) {
+          return false;
+        }
+      }
+
+      // 4. Joiner Filter
+      if (selectedJoinerFilter !== 'All') {
+        const orderJoiner = getJoinerNameForOrder(o).toLowerCase();
+        const targetJoiner = selectedJoinerFilter.toLowerCase();
+        if (orderJoiner !== targetJoiner && !orderJoiner.includes(targetJoiner)) {
+          return false;
+        }
+      }
+
+      // 5. Status Filter
+      if (statusFilter !== 'All') {
+        const st = String(o.status || o.orderStatus || '').toLowerCase();
+        const targetSt = statusFilter.toLowerCase();
+        if (targetSt === 'pending' && st !== 'pending') return false;
+        if (targetSt === 'accepted' && st !== 'accepted' && st !== 'confirmed') return false;
+        if (targetSt === 'preparing' && st !== 'preparing') return false;
+        if (targetSt === 'out for delivery' && st !== 'out for delivery') return false;
+        if (targetSt === 'delivered' && st !== 'delivered') return false;
+        if (targetSt === 'cancelled' && st !== 'cancelled') return false;
+        if (targetSt === 'rejected' && st !== 'rejected') return false;
+      }
+
+      // 6. Payment Filter
+      if (paymentFilter !== 'All') {
+        const mode = String(o.paymentMode || o.paymentMethod || '').toLowerCase();
+        const payStatus = String(o.paymentStatus || '').toLowerCase();
+        const targetPay = paymentFilter.toLowerCase();
+
+        if (targetPay === 'cod' && mode !== 'cod') return false;
+        if (targetPay === 'online' && mode !== 'online') return false;
+        if (targetPay === 'wallet' && mode !== 'wallet') return false;
+        if (targetPay === 'paid' && payStatus !== 'paid' && payStatus !== 'success') return false;
+        if (targetPay === 'pending' && payStatus !== 'pending') return false;
+        if (targetPay === 'failed' && payStatus !== 'failed' && payStatus !== 'refunded') return false;
+      }
+
+      // 7. Date Filter
+      if (dateFilter !== 'All') {
+        const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+        if (dateFilter === 'Today') {
+          if (o.date !== 'Today' && o.date !== todayStr) return false;
+        } else if (dateFilter === 'Yesterday') {
+          if (o.date !== yesterday && o.date !== 'Yesterday') return false;
+        } else if (dateFilter === 'Custom' && customDate) {
+          const ordDate = o.date;
+          if (!ordDate.includes(customDate)) return false;
+        }
+      }
+
+      // 8. Search Text Filter (Partner Name, Partner ID, Phone, Customer, Order ID)
+      if (searchTerm.trim()) {
+        const q = searchTerm.trim().toLowerCase();
+        const partnerName = getJoinerNameForOrder(o).toLowerCase();
+        const partnerId = String(o.partnerId || o.joinerId || '').toLowerCase();
+        const customerName = getCustomerNameForOrder(o).toLowerCase();
+        const customerId = String(o.customerId || o.hotelId || '').toLowerCase();
+        const orderId = String(o.orderId || o.id || '').toLowerCase();
+        const phone = String(o.mobileNumber || o.hotelPhone || o.joinerPhone || '').toLowerCase();
+        const driverName = String(o.driver || '').toLowerCase();
+        const zoneName = String(o.zoneName || o.zone || '').toLowerCase();
+
+        const matches = (
+          orderId.includes(q) ||
+          partnerName.includes(q) ||
+          partnerId.includes(q) ||
+          customerName.includes(q) ||
+          customerId.includes(q) ||
+          phone.includes(q) ||
+          driverName.includes(q) ||
+          zoneName.includes(q)
+        );
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [uniqueOrders, selectedZoneFilter, sourceFilter, selectedHotelFilter, selectedJoinerFilter, statusFilter, paymentFilter, dateFilter, customDate, searchTerm]);
+
+  // Pagination
+  const totalOrders = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalOrders / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (safeCurrentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalFiltered);
+  const endIndex = Math.min(startIndex + pageSize, totalOrders);
   const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
-  const activeOrder: Order | null =
-    selectedOrder && orders.some(o => String(o.id) === String(selectedOrder.id))
-      ? selectedOrder
-      : filteredOrders[0] || orders[0] || null;
+  const isAllExpanded = paginatedOrders.length > 0 && paginatedOrders.every(o => expandedOrderIds.includes(o.id));
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedOrderIds(paginatedOrders.map(o => o.id));
+  const toggleExpandOrder = (id: string) => {
+    setExpandedOrderIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleExpandAll = () => {
+    if (isAllExpanded) {
+      setExpandedOrderIds([]);
     } else {
-      setSelectedOrderIds([]);
+      setExpandedOrderIds(paginatedOrders.map(o => o.id));
     }
   };
 
-  const handleSelectRow = (id: string) => {
-    if (selectedOrderIds.includes(id)) {
-      setSelectedOrderIds(prev => prev.filter(item => item !== id));
-    } else {
-      setSelectedOrderIds(prev => [...prev, id]);
-    }
-  };
-
-  const handleResetFilters = () => {
+  const resetFilters = () => {
+    setSelectedZoneFilter('All');
+    setSourceFilter('All');
+    setSelectedHotelFilter('All');
+    setSelectedJoinerFilter('All');
+    setStatusFilter('All');
+    setPaymentFilter('All');
+    setDateFilter('All');
+    setCustomDate('');
     setSearchTerm('');
-    setSelectedZone('All Zones');
-    setSelectedHotelFilter('All Hotels');
-    setSelectedJoinerFilter('All Joiners');
-    setSelectedDriverFilter('All Drivers');
-    setStatusFilter('All Status');
-    setPaymentFilter('All Payments');
     setCurrentPage(1);
+    setSelectedOrderIds([]);
+  };
+
+  // Run Multi-Mobile Simulation
+  const handleRunSimulation = async () => {
+    try {
+      setIsSimulating(true);
+      const createdIds = await simulateMultiMobileOrders(5);
+      setSimulationToast(`✅ 5 Mobile Device Orders created simultaneously across 5 zones! Order IDs: ${createdIds.slice(0, 2).join(', ')}...`);
+      setTimeout(() => setSimulationToast(null), 6000);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to simulate orders');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedOrderIds.length === paginatedOrders.length && paginatedOrders.length > 0) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(paginatedOrders.map(o => o.orderId || o.id));
+    }
+  };
+
+  const handleToggleSelectOrder = (id: string) => {
+    setSelectedOrderIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkAccept = async () => {
+    if (selectedOrderIds.length === 0) return;
+    const pendingToAccept = orders.filter(o => selectedOrderIds.includes(o.orderId || o.id) && (o.status === 'Pending' || (o as any).orderStatus === 'pending'));
+    if (pendingToAccept.length === 0) {
+      alert('None of the selected orders are in Pending status.');
+      return;
+    }
+    for (const ord of pendingToAccept) {
+      await acceptOrder(ord.orderId || ord.id);
+    }
+    setSelectedOrderIds([]);
+  };
+
+  const handleBulkApproveDelivery = async () => {
+    if (selectedOrderIds.length === 0) return;
+    const deliveredToApprove = orders.filter(o => 
+      selectedOrderIds.includes(o.orderId || o.id) && 
+      (o.status === 'Delivered' || (o as any).orderStatus === 'delivered') && 
+      !o.adminApproved
+    );
+    if (deliveredToApprove.length === 0) {
+      alert('None of the selected orders are delivered and awaiting admin verification.');
+      return;
+    }
+    for (const ord of deliveredToApprove) {
+      await approveDelivery(ord.orderId || ord.id);
+    }
+    setSelectedOrderIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedOrderIds.length === 0) return;
+    confirmAction({
+      title: 'Bulk Delete Orders',
+      message: `Are you sure you want to permanently delete ${selectedOrderIds.length} selected orders from Firestore?`,
+      entityName: `${selectedOrderIds.length} Orders`,
+      confirmLabel: 'Delete Selected',
+      type: 'danger',
+      onConfirm: async () => {
+        for (const id of selectedOrderIds) {
+          await deleteOrder(id);
+        }
+        setSelectedOrderIds([]);
+      }
+    });
+  };
+
+  const handleToggleItemVerified = (itemKey: string) => {
+    setVerifiedItemIds(prev => ({
+      ...prev,
+      [itemKey]: !prev[itemKey]
+    }));
   };
 
   const handleExportCSV = () => {
-    const headers = ['Order ID', 'Date', 'Time', 'Hotel Name', 'Zone', 'Joiner', 'Amount', 'Payment Mode', 'Driver', 'Status', 'Commission'];
+    const headers = ['Order ID', 'Source', 'Date', 'Time', 'Customer / Hotel', 'Partner Name', 'Zone', 'Grand Total', 'Payment Mode', 'Payment Status', 'Driver', 'Status', 'Admin Approved', 'Commission Status'];
     const rows = filteredOrders.map(o => [
-      o.id,
+      o.orderId || o.id,
+      o.orderSource || 'mobile',
       o.date,
       o.time,
-      `"${o.hotelName}"`,
-      o.zone,
-      `"${o.joiner}"`,
+      `"${getCustomerNameForOrder(o)}"`,
+      `"${getJoinerNameForOrder(o)}"`,
+      o.zoneName || o.zone,
       o.amount,
       o.paymentMode,
+      o.paymentStatus,
       `"${o.driver}"`,
       o.status,
-      o.commission
+      o.adminApproved ? 'Yes' : 'No',
+      o.commissionStatus || 'pending'
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `FarmerBox_Orders_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `FarmerBox_Central_Orders_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleDownloadInvoice = () => {
-    window.print();
-  };
-
-  const handleCreateOrderSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const hotelObj = hotels.find(h => h.name.toLowerCase() === newHotelName.toLowerCase()) || hotels[0];
-    const assignedDriverObj = drivers.find(d => d.name.toLowerCase() === newDriver.toLowerCase()) || drivers[0];
-    const calculatedTotal = newOrderItems.reduce((sum, it) => sum + Number(it.qty * it.price), 0);
-    const finalAmount = calculatedTotal > 0 ? calculatedTotal : 3200;
-
-    const orderNum = 1000 + orders.length + 1;
-    const orderId = `#FB${orderNum}`;
-
-    const newOrderRecord: Order = {
-      id: orderId,
-      orderId: orderId,
-      hotelId: hotelObj?.id || hotelObj?.hotelId || 'HT01',
-      hotelName: newHotelName || (hotelObj ? hotelObj.name : 'Hotel Maharaja Executive'),
-      hotelImage: hotelObj?.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
-      zone: hotelObj?.zone || 'Kharadi',
-      hotelZone: hotelObj?.zone || 'Kharadi',
-      joiner: hotelObj?.joiner || 'Rahul Patil',
-      joinerId: hotelObj?.joinerId || 'JN1001',
-      amount: finalAmount,
-      totalAmount: finalAmount,
-      subtotal: finalAmount,
-      deliveryCharge: 0,
-      status: 'Pending',
-      orderStatus: 'Pending',
-      date: 'Today',
-      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      timeSlot: '8 AM - 10 AM',
-      paymentMode: newPaymentMode,
-      paymentStatus: newPaymentMode === 'Online' ? 'Paid' : 'Pending',
-      driver: newDriver || (assignedDriverObj ? assignedDriverObj.name : 'Ramesh Pawar'),
-      driverPhone: assignedDriverObj?.mobile || '9876543210',
-      commission: 100,
-      deliveryAddress: hotelObj?.address || `${hotelObj?.zone || 'Kharadi'}, Pune`,
-      items: newOrderItems.map(it => ({
-        id: it.id,
-        productId: it.id,
-        productName: it.productName,
-        name: it.productName,
-        qty: Number(it.qty),
-        quantity: Number(it.qty),
-        unit: it.unit || 'KG',
-        price: Number(it.price),
-        total: Number(it.qty * it.price)
-      }))
-    };
-
-    addOrder(newOrderRecord);
-    setSelectedOrder(newOrderRecord);
-    setIsCreateOrderOpen(false);
-  };
-
-  const handleAddItemToNewOrder = (productName: string, price: number, unit: string = 'KG') => {
-    setNewOrderItems(prev => [
-      ...prev,
-      {
-        id: Date.now(),
-        productName,
-        qty: 10,
-        unit,
-        price,
-        total: 10 * price
-      }
-    ]);
-  };
-
-  const handleRemoveItemFromNewOrder = (id: number) => {
-    setNewOrderItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleUpdateItemQty = (id: number, delta: number) => {
-    setNewOrderItems(prev =>
-      prev.map(item => {
-        if (item.id === id) {
-          const nextQty = Math.max(1, item.qty + delta);
-          return {
-            ...item,
-            qty: nextQty,
-            total: nextQty * item.price
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  const handleViewHotel = (hotelName: string) => {
-    const found = hotels.find(h => h.name.toLowerCase() === hotelName.toLowerCase());
-    if (found) {
-      setSelectedHotel(found);
-    }
-    setActiveTab('Hotels');
-  };
-
-  const activeHotelObj = activeOrder ? hotels.find(h => h.name.toLowerCase() === activeOrder.hotelName.toLowerCase()) : null;
-  const hotelImg = activeOrder?.hotelImage || activeHotelObj?.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100';
-
-  const totalOrdersCount = orders.length;
-  const pendingOrdersCount = orders.filter(o => o.status === 'Pending').length;
-  const confirmedOrdersCount = orders.filter(o => o.status === 'Confirmed' || o.status === 'Preparing').length;
-  const outForDeliveryOrdersCount = orders.filter(o => o.status === 'Out for Delivery').length;
-  const deliveredOrdersCount = orders.filter(o => o.status === 'Delivered').length;
-
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-5">
-      {/* Top 6 KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-center">
-        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
-            <FileText className="w-5 h-5" />
+    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-5 select-none">
+      {/* 🔔 Real-Time Floating New Order Notification Banner */}
+      {newOrderAlert?.visible && newOrderAlert.order && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 border-emerald-300 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 text-amber-300 animate-pulse">
+              <Bell className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-400 text-slate-900 font-black text-[11px] px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  🔔 Real-Time Order Placed
+                </span>
+                <span className="font-mono font-bold text-xs bg-black/20 px-2 py-0.5 rounded">
+                  {newOrderAlert.order.orderId || newOrderAlert.order.id}
+                </span>
+              </div>
+              <p className="font-bold text-sm mt-0.5">
+                {getCustomerNameForOrder(newOrderAlert.order)} • {newOrderAlert.order.zoneName || newOrderAlert.order.zone} Zone
+              </p>
+              <p className="text-xs text-emerald-100 font-medium">
+                Partner: <strong className="text-white">{getJoinerNameForOrder(newOrderAlert.order)}</strong> • Grand Total: <strong className="text-amber-200">₹{newOrderAlert.order.amount}</strong> ({newOrderAlert.order.items?.length || 0} Items)
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500">Total Orders</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{totalOrdersCount}</h3>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setSelectedOrder(newOrderAlert.order);
+                setIsOrderDetailModalOpen(true);
+                dismissNewOrderAlert();
+              }}
+              className="px-4 py-2 bg-white text-emerald-800 hover:bg-emerald-50 font-black text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
+            >
+              View Order Details
+            </button>
+            <button
+              onClick={dismissNewOrderAlert}
+              className="p-2 text-white/80 hover:text-white bg-black/20 hover:bg-black/30 rounded-xl cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
+      )}
 
-        <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
-            <Hourglass className="w-5 h-5" />
+      {/* Simulation Feedback Toast */}
+      {simulationToast && (
+        <div className="bg-purple-900 text-white px-4 py-3 rounded-xl shadow-lg border border-purple-400 flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-purple-300" />
+            <span>{simulationToast}</span>
           </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500">Pending</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{pendingOrdersCount}</h3>
-          </div>
+          <button onClick={() => setSimulationToast(null)} className="text-purple-300 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
+      )}
 
-        <div className="bg-sky-50/80 p-3.5 rounded-xl border border-sky-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500">Confirmed</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{confirmedOrdersCount}</h3>
-          </div>
-        </div>
-
-        <div className="bg-purple-50/80 p-3.5 rounded-xl border border-purple-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500">Out for Delivery</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{outForDeliveryOrdersCount}</h3>
-          </div>
-        </div>
-
-        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold">
-            <Package className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500">Delivered</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{deliveredOrdersCount}</h3>
-          </div>
-        </div>
-
+      {/* Top Header & Action Bar */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Orders Management</h1>
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[11px] rounded-full border border-emerald-200">
+              Live Sync
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-normal">
+            Manage hotels, joiners, orders and deliver fresh vegetables
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setIsCreateOrderOpen(true)}
-            className="w-full h-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            onClick={handleRunSimulation}
+            disabled={isSimulating}
+            title="Simulate 5 mobile devices placing orders simultaneously across zones"
+            className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
           >
-            <Plus className="w-4 h-4" /> Create Order
+            <Smartphone className="w-3.5 h-3.5" />
+            {isSimulating ? 'Placing Mobile Orders...' : '⚡ Test Mobile Orders'}
+          </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> Export CSV
           </button>
         </div>
       </div>
 
-      {/* Full-width Orders List Table Section (No Slider) */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-base text-slate-800 whitespace-nowrap">Orders List</h3>
-            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-md border border-emerald-200 whitespace-nowrap">
-              {totalFiltered} {totalFiltered === 1 ? 'Order' : 'Orders'}
-            </span>
+      {/* 9 Metrics Dashboard Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2.5">
+        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+          <p className="text-[11px] font-semibold text-slate-500 truncate">Today's Orders</p>
+          <h4 className="text-lg font-black text-slate-900 mt-0.5">{metrics.todayOrdersCount}</h4>
+        </div>
+        <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-2xs">
+          <p className="text-[11px] font-bold text-amber-800 truncate">Pending</p>
+          <h4 className="text-lg font-black text-amber-900 mt-0.5">{metrics.pendingCount}</h4>
+        </div>
+        <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-2xs">
+          <p className="text-[11px] font-bold text-blue-800 truncate">Accepted</p>
+          <h4 className="text-lg font-black text-blue-900 mt-0.5">{metrics.acceptedCount}</h4>
+        </div>
+        <div className="bg-sky-50 p-3 rounded-xl border border-sky-200 shadow-2xs">
+          <p className="text-[11px] font-bold text-sky-800 truncate">Out for Delivery</p>
+          <h4 className="text-lg font-black text-sky-900 mt-0.5">{metrics.outForDeliveryCount}</h4>
+        </div>
+        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 shadow-2xs">
+          <p className="text-[11px] font-bold text-emerald-800 truncate">Delivered</p>
+          <h4 className="text-lg font-black text-emerald-900 mt-0.5">{metrics.deliveredCount}</h4>
+        </div>
+        <div className="bg-rose-50 p-3 rounded-xl border border-rose-200 shadow-2xs">
+          <p className="text-[11px] font-bold text-rose-800 truncate">Cancelled</p>
+          <h4 className="text-lg font-black text-rose-900 mt-0.5">{metrics.cancelledCount}</h4>
+        </div>
+        <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-300 shadow-2xs">
+          <p className="text-[11px] font-bold text-emerald-900 truncate">Today's Revenue</p>
+          <h4 className="text-base font-black text-emerald-900 mt-0.5 font-mono">₹{metrics.todayRevenue.toLocaleString('en-IN')}</h4>
+        </div>
+        <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-300 shadow-2xs">
+          <p className="text-[11px] font-bold text-amber-900 truncate">Pending Comm.</p>
+          <h4 className="text-base font-black text-amber-900 mt-0.5 font-mono">₹{metrics.pendingCommission.toLocaleString('en-IN')}</h4>
+        </div>
+        <div className="bg-purple-500/10 p-3 rounded-xl border border-purple-300 shadow-2xs">
+          <p className="text-[11px] font-bold text-purple-900 truncate">Released Comm.</p>
+          <h4 className="text-base font-black text-purple-900 mt-0.5 font-mono">₹{metrics.releasedCommission.toLocaleString('en-IN')}</h4>
+        </div>
+      </div>
+
+      {/* Zone Quick-Selector Tabs */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Zone Dashboard & Real-Time Filter:
+          </span>
+          <span className="text-[11px] text-slate-400 font-medium">
+            Showing {filteredOrders.length} of {uniqueOrders.length} Total Orders
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            onClick={() => setSelectedZoneFilter('All')}
+            className={`px-3 py-1.5 rounded-xl font-black text-xs whitespace-nowrap transition-all cursor-pointer ${
+              selectedZoneFilter === 'All'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            All Zones ({uniqueOrders.length})
+          </button>
+
+          {allZoneNames.map(zName => {
+            const zStat = zoneStats.get(zName) || { count: 0, revenue: 0 };
+            const isSelected = selectedZoneFilter.toLowerCase().replace(' zone', '') === zName.toLowerCase().replace(' zone', '');
+
+            return (
+              <button
+                key={zName}
+                onClick={() => setSelectedZoneFilter(zName)}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <span>{zName}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'
+                }`}>
+                  {zStat.count} • ₹{zStat.revenue.toLocaleString('en-IN')}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Filter & Search Toolbar (Allows Selecting Hotel, Joiner, Status, Payment, Date) */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search Order, Hotel, Joiner..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600"
+            />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <div className="relative w-full sm:w-44 shrink-0">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search order, hotel..."
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-600"
-              />
-            </div>
-
+          {/* Hotel Selector */}
+          <div>
             <select
-              value={selectedZone}
-              onChange={e => {
-                setSelectedZone(e.target.value);
+              value={selectedHotelFilter}
+              onChange={(e) => {
+                setSelectedHotelFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600 cursor-pointer text-slate-800"
             >
-              <option value="All Zones">All Zones</option>
-              {zones.map(z => (
-                <option key={z.id} value={z.name}>{z.name}</option>
+              <option value="All">All Hotels ({allHotelNames.length})</option>
+              {allHotelNames.map(hName => (
+                <option key={hName} value={hName}>{hName}</option>
               ))}
             </select>
+          </div>
 
+          {/* Joiner Selector */}
+          <div>
             <select
               value={selectedJoinerFilter}
-              onChange={e => {
+              onChange={(e) => {
                 setSelectedJoinerFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600 cursor-pointer text-slate-800"
             >
-              <option value="All Joiners">All Joiners</option>
-              {joiners.map(j => (
-                <option key={j.id} value={j.name}>{j.name}</option>
+              <option value="All">All Joiners ({allJoinerNames.length})</option>
+              {allJoinerNames.map(jName => (
+                <option key={jName} value={jName}>{jName}</option>
               ))}
             </select>
+          </div>
 
+          {/* Status Filter */}
+          <div>
             <select
               value={statusFilter}
-              onChange={e => {
+              onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600 cursor-pointer text-slate-800"
             >
-              <option value="All Status">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Confirmed">Confirmed</option>
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending Orders</option>
+              <option value="Accepted">Accepted / Confirmed</option>
               <option value="Preparing">Preparing</option>
               <option value="Out for Delivery">Out for Delivery</option>
               <option value="Delivered">Delivered</option>
               <option value="Cancelled">Cancelled</option>
+              <option value="Rejected">Rejected</option>
             </select>
+          </div>
 
+          {/* Payment Filter */}
+          <div>
             <select
               value={paymentFilter}
-              onChange={e => {
+              onChange={(e) => {
                 setPaymentFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600 cursor-pointer text-slate-800"
             >
-              <option value="All Payments">All Payments</option>
-              <option value="Online">Online</option>
-              <option value="COD">COD</option>
+              <option value="All">All Payments</option>
+              <option value="COD">COD (Cash on Delivery)</option>
+              <option value="Online">Online Payment</option>
+              <option value="Wallet">Wallet Payment</option>
+              <option value="Paid">Payment Status: Paid</option>
+              <option value="Pending">Payment Status: Pending</option>
+              <option value="Failed">Payment Status: Failed</option>
             </select>
+          </div>
 
-            <button
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer transition-colors shrink-0"
-              title="Export Orders CSV"
+          {/* Date Filter & Reset */}
+          <div className="flex items-center gap-2">
+            <select
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-emerald-600 cursor-pointer text-slate-800"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Export</span>
-            </button>
-
+              <option value="All">All Dates</option>
+              <option value="Today">Today</option>
+              <option value="Yesterday">Yesterday</option>
+              <option value="Custom">Custom Date</option>
+            </select>
             <button
-              onClick={() => setIsCreateOrderOpen(true)}
-              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+              onClick={resetFilters}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              title="Reset all filters"
             >
-              <Plus className="w-3.5 h-3.5" /> Create Order
+              <RefreshCw className="w-3.5 h-3.5" /> Reset
             </button>
           </div>
         </div>
 
-        {/* Selected Orders Actions Bar */}
-        {selectedOrderIds.length > 0 && (
-          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
-            <span className="font-bold text-emerald-900">
-              {selectedOrderIds.length} orders selected
+        {/* Device Source Quick-Filter Buttons */}
+        <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5 text-purple-600" /> Device Source:
             </span>
             <button
-              onClick={() => {
-                confirmAction({
-                  title: 'Delete Selected Orders',
-                  message: `Are you sure you want to permanently delete these ${selectedOrderIds.length} orders?`,
-                  entityName: `${selectedOrderIds.length} Orders`,
-                  confirmLabel: 'Delete Orders',
-                  type: 'danger',
-                  onConfirm: () => {
-                    selectedOrderIds.forEach(id => deleteOrder(id));
-                    setSelectedOrderIds([]);
-                  }
-                });
-              }}
-              className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+              onClick={() => { setSourceFilter('All'); setCurrentPage(1); }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                sourceFilter === 'All'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
             >
-              <Trash2 className="w-3.5 h-3.5" /> Delete Selected
+              All Sources ({uniqueOrders.length})
+            </button>
+            <button
+              onClick={() => { setSourceFilter('Mobile'); setCurrentPage(1); }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                sourceFilter === 'Mobile'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>📱 Mobile Device Orders</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                sourceFilter === 'Mobile' ? 'bg-white/30 text-white' : 'bg-purple-200 text-purple-900'
+              }`}>
+                {mobileOrdersCount}
+              </span>
+            </button>
+            <button
+              onClick={() => { setSourceFilter('Web'); setCurrentPage(1); }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                sourceFilter === 'Web'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              💻 Web Admin Orders ({uniqueOrders.length - mobileOrdersCount})
             </button>
           </div>
-        )}
 
-        {/* Orders Table */}
-        {filteredOrders.length === 0 ? (
-          <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <Package className="w-6 h-6" />
-            </div>
-            <div className="max-w-md mx-auto">
-              <h4 className="font-bold text-sm text-slate-800">
-                {orders.length === 0 ? 'No Orders in System Yet' : 'No Orders Match Your Filter'}
-              </h4>
-              <p className="text-xs text-slate-500 mt-1">
-                {orders.length === 0
-                  ? 'Orders placed by hotel partners via the mobile app or created by administrators will appear here in real time.'
-                  : 'Try resetting the zone, status, or search filters to view all available orders.'}
+          <span className="text-[11px] text-slate-400 font-medium">
+            Showing {filteredOrders.length} {sourceFilter === 'Mobile' ? 'Mobile Orders' : 'Orders'}
+          </span>
+        </div>
+
+        {dateFilter === 'Custom' && (
+          <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600">Enter Date:</span>
+            <input
+              type="text"
+              placeholder="e.g. 09 Oct 2026 or 2026-10-09"
+              value={customDate}
+              onChange={(e) => setCustomDate(e.target.value)}
+              className="max-w-xs px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Bulk Selection Actions Bar */}
+      {selectedOrderIds.length > 0 && (
+        <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-xs">
+              {selectedOrderIds.length}
+            </span>
+            <div>
+              <p className="font-extrabold text-xs text-white">
+                {selectedOrderIds.length} {selectedOrderIds.length === 1 ? 'Order' : 'Orders'} Selected
               </p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-1">
-              {orders.length === 0 ? (
-                <button
-                  onClick={() => setIsCreateOrderOpen(true)}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Create First Order
-                </button>
-              ) : (
-                <button
-                  onClick={handleResetFilters}
-                  className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-colors"
-                >
-                  Reset Filters
-                </button>
-              )}
+              <p className="text-[10.5px] text-slate-400">Perform centralized bulk lifecycle actions</p>
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleBulkAccept}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Bulk Accept
+            </button>
+            <button
+              onClick={handleBulkApproveDelivery}
+              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Bulk Approve Delivery (+₹100)
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" /> Export Manifest
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Bulk Delete
+            </button>
+            <button
+              onClick={() => setSelectedOrderIds([])}
+              className="px-2.5 py-1.5 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Orders Table Container */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="font-black text-sm text-slate-900">Orders Roster</h3>
+            <span className="text-xs bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-lg">
+              {filteredOrders.length} Orders
+            </span>
+          </div>
+
+          <button
+            onClick={toggleExpandAll}
+            className="text-xs font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+          >
+            {isAllExpanded ? 'Collapse All' : 'Expand All'}
+          </button>
+        </div>
+
+        {/* Empty State */}
+        {paginatedOrders.length === 0 ? (
+          <div className="p-12 text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <ShoppingBag className="w-8 h-8" />
+            </div>
+            <h4 className="font-black text-slate-800 text-base">No Orders Found</h4>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {searchTerm || selectedZoneFilter !== 'All' || statusFilter !== 'All'
+                ? 'No orders match your current filters. Try resetting the filters.'
+                : 'Orders placed from any mobile device or partner hotel in any zone will appear here instantly in real-time.'}
+            </p>
+            <button
+              onClick={handleRunSimulation}
+              className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+            >
+              <Smartphone className="w-4 h-4" /> Simulate 5 Mobile Device Orders
+            </button>
+          </div>
         ) : (
-          <div className="w-full">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
-                  <th className="py-2.5 px-2 w-8 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedOrderIds.length === paginatedOrders.length && paginatedOrders.length > 0}
-                      onChange={handleSelectAll}
-                      className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                    />
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-3 w-10 text-center">
+                    <button
+                      onClick={handleToggleSelectAll}
+                      className="text-slate-500 hover:text-slate-900 cursor-pointer"
+                      title="Select all on this page"
+                    >
+                      {selectedOrderIds.length > 0 && selectedOrderIds.length === paginatedOrders.length ? (
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
                   </th>
-                  <th className="py-2.5 px-2 w-8 text-center whitespace-nowrap">#</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Order ID</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Date & Time</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Hotel Name</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Zone</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Joiner</th>
-                  <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Amount</th>
-                  <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Payment</th>
-                  <th className="py-2.5 px-2.5 whitespace-nowrap">Driver</th>
-                  <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Status</th>
-                  <th className="py-2.5 px-2.5 text-center whitespace-nowrap">Actions</th>
+                  <th className="py-3 px-3">Order ID & Date</th>
+                  <th className="py-3 px-3">Customer / Hotel</th>
+                  <th className="py-3 px-3">Partner & Zone</th>
+                  <th className="py-3 px-3">Produce Items</th>
+                  <th className="py-3 px-3">Total Amount</th>
+                  <th className="py-3 px-3">Payment</th>
+                  <th className="py-3 px-3">Delivery Driver</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3 text-right">Verification & Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedOrders.map((ord, idx) => {
-                  const isSelected = activeOrder && String(activeOrder.id) === String(ord.id);
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {paginatedOrders.map((ord) => {
+                  const ordKey = ord.orderId || ord.id;
+                  const isSelected = selectedOrderIds.includes(ordKey);
+                  const partnerName = getJoinerNameForOrder(ord);
+                  const customerName = getCustomerNameForOrder(ord);
+                  const isDelivered = ord.status === 'Delivered';
+                  const isPending = ord.status === 'Pending';
+                  const isOutForDelivery = ord.status === 'Out for Delivery';
+                  const isApproved = Boolean(ord.adminApproved);
+                  const isExpanded = expandedOrderIds.includes(ord.id);
+                  const itemsList = ord.items || [];
+
                   return (
-                    <tr
-                      key={ord.id}
-                      onClick={() => setSelectedOrder(ord)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50/60'
-                      }`}
-                    >
-                      <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedOrderIds.includes(ord.id)}
-                          onChange={() => handleSelectRow(ord.id)}
-                          className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                        />
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-medium text-slate-500 whitespace-nowrap">
-                        {startIndex + idx + 1}
-                      </td>
-                      <td className="py-2.5 px-2.5 font-bold text-sky-700 whitespace-nowrap">
-                        {ord.id}
-                      </td>
-                      <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap">
-                        <div className="font-semibold text-slate-800">{ord.date}</div>
-                        <div className="text-[10px] text-slate-400">{ord.time}</div>
-                      </td>
-                      <td className="py-2.5 px-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={ord.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'}
-                            alt=""
-                            aria-hidden="true"
-                            className="w-6 h-6 rounded-md object-cover border border-slate-200 shrink-0"
-                          />
-                          <span className="font-bold text-slate-800">{ord.hotelName}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap">{ord.zone}</td>
-                      <td className="py-2.5 px-2.5 text-slate-700 whitespace-nowrap font-medium">
-                        {ord.addedBy === 'Admin' || ord.joiner === 'Admin' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                            <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
+                    <React.Fragment key={ord.id || ord.orderId}>
+                      <tr className={`transition-colors ${isSelected ? 'bg-emerald-50/50' : 'hover:bg-slate-50/60'}`}>
+                        {/* Checkbox */}
+                        <td className="py-3 px-3 align-top text-center">
+                          <button
+                            onClick={() => handleToggleSelectOrder(ordKey)}
+                            className="text-slate-400 hover:text-emerald-600 cursor-pointer mt-0.5"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-300" />
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Order ID & Source */}
+                        <td className="py-3 px-3 align-top">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-black text-slate-900 text-xs">
+                              {ord.orderId || ord.id}
+                            </span>
+                            {isOrderFromMobile(ord) ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSourceFilter('Mobile');
+                                }}
+                                className="inline-flex items-center gap-1 text-[9.5px] px-1.5 py-0.5 rounded-md font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs cursor-pointer hover:bg-purple-200 transition-colors"
+                                title="Placed via Mobile Device (Click to filter only mobile orders)"
+                              >
+                                <Smartphone className="w-2.5 h-2.5 text-purple-700 shrink-0" />
+                                <span>Mobile App</span>
+                              </button>
+                            ) : (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                Web Admin
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 font-medium mt-0.5">
+                            {ord.date} • {ord.time}
+                          </p>
+                        </td>
+
+                        {/* Customer / Hotel (Clickable to manage Hotel) */}
+                        <td className="py-3 px-3 align-top">
+                          <button
+                            onClick={() => setActiveTab('Hotels')}
+                            className="font-bold text-slate-900 text-xs hover:text-emerald-700 text-left flex items-center gap-1 cursor-pointer group"
+                            title="Manage Hotel in Hotels Section"
+                          >
+                            <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                            <span>{customerName}</span>
+                          </button>
+                          {ord.mobileNumber && (
+                            <p className="text-[10.5px] text-slate-500 font-mono mt-0.5">
+                              📞 {ord.mobileNumber}
+                            </p>
+                          )}
+                        </td>
+
+                        {/* Partner & Zone (Clickable to manage Joiner) */}
+                        <td className="py-3 px-3 align-top">
+                          <button
+                            onClick={() => setActiveTab('Hotel Joiners')}
+                            className="font-bold text-slate-800 hover:text-emerald-700 text-left flex items-center gap-1 text-xs cursor-pointer group"
+                            title="Manage Joiner Partner"
+                          >
+                            <User className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                            <span>{partnerName}</span>
+                          </button>
+                          <span className="inline-flex items-center gap-1 text-[10.5px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded mt-0.5">
+                            <MapPin className="w-2.5 h-2.5" /> {ord.zoneName || ord.zone || 'Kharadi'}
                           </span>
-                        ) : (
-                          ord.joiner || '—'
-                        )}
-                      </td>
-                      <td className="py-2.5 px-2.5 text-right font-black text-slate-900 whitespace-nowrap">
-                        ₹{Number(ord.amount || 0).toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                          ord.paymentMode === 'Online'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {ord.paymentMode}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap font-medium">
-                        {ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' && ord.driver !== '—' ? (
+                        </td>
+
+                        {/* Produce Items Summary */}
+                        <td className="py-3 px-3 align-top">
                           <div className="flex items-center gap-1.5">
-                            <span className="flex items-center gap-1 text-slate-800 font-bold">
-                              <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span className="truncate max-w-[110px]">{ord.driver}</span>
+                            <span className="font-bold text-slate-800">
+                              {itemsList.length} {itemsList.length === 1 ? 'Item' : 'Items'}
                             </span>
                             <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                setAssignModalOrderId(ord.id);
-                                setIsAssignModalOpen(true);
-                              }}
-                              className="px-1.5 py-0.5 bg-slate-100 hover:bg-purple-100 text-purple-700 rounded text-[10px] font-bold cursor-pointer transition-colors"
-                              title="Reassign Driver"
+                              onClick={() => toggleExpandOrder(ord.id)}
+                              className="text-[10px] text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer"
                             >
-                              Change
+                              {isExpanded ? 'Hide' : 'Inspect'}
                             </button>
                           </div>
-                        ) : (
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setAssignModalOrderId(ord.id);
-                              setIsAssignModalOpen(true);
-                            }}
-                            className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10.5px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
-                          >
-                            <Truck className="w-3 h-3 text-purple-600 shrink-0" />
-                            <span>+ Assign Driver</span>
-                          </button>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                          ord.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' :
-                          ord.status === 'Out for Delivery' ? 'bg-sky-100 text-sky-800' :
-                          ord.status === 'Preparing' ? 'bg-amber-100 text-amber-800' :
-                          ord.status === 'Confirmed' ? 'bg-blue-100 text-blue-800' :
-                          'bg-rose-100 text-rose-800'
-                        }`}>
-                          {ord.status}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-2.5 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5">
-                          {ord.status === 'Pending' && (
+                          <p className="text-[10.5px] text-slate-500 truncate max-w-[170px]">
+                            {itemsList.map(i => i.productName || i.name).join(', ') || 'Produce goods'}
+                          </p>
+                        </td>
+
+                        {/* Total Amount */}
+                        <td className="py-3 px-3 align-top font-mono font-black text-slate-900 text-sm">
+                          ₹{Number(ord.amount || ord.totalAmount || 0).toLocaleString('en-IN')}
+                        </td>
+
+                        {/* Payment */}
+                        <td className="py-3 px-3 align-top">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black ${
+                            ord.paymentMode === 'COD'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                              : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                          }`}>
+                            {ord.paymentMode || 'Online'}
+                          </span>
+                          <p className="text-[10px] text-slate-500 font-semibold mt-0.5 capitalize">
+                            Status: {ord.paymentStatus || 'Pending'}
+                          </p>
+                        </td>
+
+                        {/* Driver (Clickable to manage Drivers) */}
+                        <td className="py-3 px-3 align-top">
+                          {ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' ? (
+                            <button
+                              onClick={() => setActiveTab('Delivery Drivers')}
+                              className="text-left group cursor-pointer"
+                              title="Manage Delivery Driver"
+                            >
+                              <p className="font-bold text-slate-800 group-hover:text-emerald-700 text-xs flex items-center gap-1">
+                                <Truck className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                                {ord.driver}
+                              </p>
+                              {ord.driverPhone && (
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">📞 {ord.driverPhone}</p>
+                              )}
+                            </button>
+                          ) : (
                             <button
                               onClick={() => {
                                 setAssignModalOrderId(ord.id);
                                 setIsAssignModalOpen(true);
                               }}
-                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Accept Order & Assign Driver"
+                              className="text-[11px] text-amber-700 hover:text-amber-800 font-bold underline cursor-pointer"
                             >
-                              <Truck className="w-3 h-3" /> Accept & Assign
+                              + Assign Driver
                             </button>
                           )}
+                        </td>
 
-                          {(ord.status === 'Confirmed' || ord.status === 'Preparing') && (
+                        {/* Order Status */}
+                        <td className="py-3 px-3 align-top">
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-black inline-flex items-center gap-1 ${
+                            isDelivered
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : isOutForDelivery
+                              ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                              : isPending
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                              : 'bg-slate-100 text-slate-800 border border-slate-300'
+                          }`}>
+                            {ord.status || 'Pending'}
+                          </span>
+                        </td>
+
+                        {/* Verification & Actions */}
+                        <td className="py-3 px-3 align-top text-right">
+                          <div className="flex flex-col items-end gap-1.5">
+                            {/* If Delivered: Admin Delivery Verification */}
+                            {isDelivered && (
+                              isApproved ? (
+                                <span className={`font-black text-[10.5px] px-2 py-0.5 rounded-lg shadow-2xs inline-flex items-center gap-1 ${
+                                  Number(ord.totalAmount ?? ord.amount ?? 0) > 1500
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-slate-600 text-white'
+                                }`}>
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  {Number(ord.totalAmount ?? ord.amount ?? 0) > 1500
+                                    ? 'Delivery Approved (+₹100 Paid)'
+                                    : 'Delivery Approved (₹0, ≤ ₹1,500)'}
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => approveDelivery(ord.id)}
+                                    title={Number(ord.totalAmount ?? ord.amount ?? 0) > 1500 ? 'Verify delivery and release ₹100 commission' : 'Verify delivery (no commission since order ≤ ₹1,500)'}
+                                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-[10.5px] rounded-lg shadow-xs cursor-pointer"
+                                  >
+                                    {Number(ord.totalAmount ?? ord.amount ?? 0) > 1500 ? 'Approve Delivery (+₹100)' : 'Approve Delivery (₹0)'}
+                                  </button>
+                                  <button
+                                    onClick={() => rejectDelivery(ord.id)}
+                                    title="Reject delivery"
+                                    className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10.5px] rounded-lg border border-rose-200 cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )
+                            )}
+
+                            {/* If Pending: Accept / Driver Assignment */}
+                            {isPending && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => acceptOrder(ord.id)}
+                                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10.5px] rounded-lg shadow-xs cursor-pointer"
+                                >
+                                  Accept Order
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setAssignModalOrderId(ord.id);
+                                    setIsAssignModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-[10.5px] rounded-lg border border-purple-200 cursor-pointer"
+                                >
+                                  Assign Driver
+                                </button>
+                              </div>
+                            )}
+
+                            {/* View Full Details Button */}
                             <button
                               onClick={() => {
-                                setAssignModalOrderId(ord.id);
-                                setIsAssignModalOpen(true);
+                                setSelectedOrder(ord);
+                                setIsOrderDetailModalOpen(true);
                               }}
-                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Assign Driver for Dispatch"
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-md cursor-pointer flex items-center gap-1"
                             >
-                              <Truck className="w-3 h-3" /> Assign Driver
+                              <Eye className="w-3 h-3" /> Inspect Order
                             </button>
-                          )}
+                          </div>
+                        </td>
+                      </tr>
 
-                          {ord.status === 'Out for Delivery' && (
-                            <button
-                              onClick={() => updateOrderStatus(ord.id, 'Delivered')}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Mark Delivered (+ ₹100 Wallet Reward to Partner)"
-                            >
-                              <CheckCircle2 className="w-3 h-3" /> Mark Delivered
-                            </button>
-                          )}
+                      {/* Expandable Fresh Produce Items Preview with Item Inspection */}
+                      {isExpanded && itemsList.length > 0 && (
+                        <tr className="bg-slate-50/40">
+                          <td colSpan={10} className="py-2.5 px-6 border-b border-slate-100">
+                            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                  <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+                                  Fresh Produce Line Items ({itemsList.length}) • Click to Inspect Quality
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Check boxes to verify packing status
+                                </span>
+                              </div>
 
-                          {ord.status === 'Delivered' && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded-md flex items-center gap-1">
-                              <Sparkles className="w-2.5 h-2.5 text-emerald-600" /> ₹100 Credited
-                            </span>
-                          )}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                {itemsList.map((item, iIdx) => {
+                                  const pName = item.productName || item.name || `Item ${iIdx + 1}`;
+                                  const pQty = Number(item.quantity || item.qty || 1);
+                                  const pUnit = item.unit || 'kg';
+                                  const pPrice = Number(item.price || 0);
+                                  const pTotal = Number(item.total || (pQty * pPrice));
+                                  const img = item.image || resolveProductImage(pName, 'Vegetables');
+                                  const itemKey = `${ordKey}_${item.productId || item.id || iIdx}`;
+                                  const isVerified = Boolean(verifiedItemIds[itemKey]);
 
-                          <button
-                            onClick={() => setSelectedOrder(ord)}
-                            className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
-                            title="View Order Details"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              confirmAction({
-                                title: 'Delete Order',
-                                message: `Are you sure you want to delete order #${ord.id}?`,
-                                entityName: `Order #${ord.id} (${ord.hotelName})`,
-                                confirmLabel: 'Delete Order',
-                                type: 'danger',
-                                onConfirm: () => deleteOrder(ord.id)
-                              });
-                            }}
-                            className="p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-100 cursor-pointer"
-                            title="Delete Order"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                                  return (
+                                    <div
+                                      key={item.id || iIdx}
+                                      className={`flex items-center justify-between gap-2.5 p-2.5 rounded-xl border transition-all ${
+                                        isVerified
+                                          ? 'bg-emerald-50/70 border-emerald-200'
+                                          : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <button
+                                          onClick={() => handleToggleItemVerified(itemKey)}
+                                          className="text-slate-400 hover:text-emerald-600 cursor-pointer shrink-0"
+                                          title="Toggle Quality & Packing Verified"
+                                        >
+                                          {isVerified ? (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          ) : (
+                                            <Square className="w-4 h-4 text-slate-300" />
+                                          )}
+                                        </button>
+
+                                        <img
+                                          src={img}
+                                          alt={pName}
+                                          className="w-10 h-10 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
+                                        />
+
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-extrabold text-slate-800 text-[11.5px] truncate">
+                                            {pName}
+                                          </p>
+                                          <p className="text-[10px] text-slate-500">
+                                            {pQty} {pUnit} × ₹{pPrice} = <strong className="text-slate-900 font-mono">₹{pTotal}</strong>
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={() => setInspectProduceData({
+                                          item: {
+                                            ...item,
+                                            inspected: isVerified
+                                          },
+                                          orderId: ordKey,
+                                          customerName,
+                                          partnerName,
+                                          zoneName: ord.zoneName || ord.zone || 'Kharadi'
+                                        })}
+                                        className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 font-extrabold text-[10px] rounded-lg border border-emerald-200 shadow-2xs cursor-pointer shrink-0 flex items-center gap-1"
+                                      >
+                                        <Leaf className="w-3 h-3" /> Inspect
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -709,571 +1305,70 @@ export const OrdersPage: React.FC = () => {
           </div>
         )}
 
-        {/* Pagination Controls */}
-        {totalFiltered > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between pt-2 text-xs text-slate-500 gap-3 border-t border-slate-100">
-            <div className="flex items-center gap-2">
-              <span>
-                Showing {totalFiltered > 0 ? startIndex + 1 : 0} to {endIndex} of {totalFiltered} orders
-              </span>
-              <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-                <span className="text-[11px] text-slate-400">Rows:</span>
-                <select
-                  value={pageSize}
-                  onChange={e => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-1.5 py-0.5 text-xs bg-slate-50 border border-slate-200 rounded font-semibold text-slate-700 focus:outline-emerald-600 cursor-pointer"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                disabled={safeCurrentPage <= 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setCurrentPage(p)}
-                  className={`px-2.5 py-1 rounded font-bold text-xs cursor-pointer ${
-                    safeCurrentPage === p ? 'bg-emerald-700 text-white' : 'border border-slate-200 hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-              <button
-                disabled={safeCurrentPage >= totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="p-1 rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+        {/* Pagination Footer */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="text-slate-500 font-medium">
+            Showing <strong className="text-slate-900">{totalOrders > 0 ? startIndex + 1 : 0}</strong> to <strong className="text-slate-900">{endIndex}</strong> of <strong className="text-slate-900">{totalOrders}</strong> Orders
           </div>
-        )}
+
+          <div className="flex items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
+            >
+              <option value={10}>10 per page</option>
+              <option value={20}>20 per page</option>
+              <option value={50}>50 per page</option>
+            </select>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={safeCurrentPage <= 1}
+              className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-bold text-slate-800 px-2">
+              Page {safeCurrentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Selected Order Details Section (Full-width Below Table) */}
-      {activeOrder && (
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold border-2 border-emerald-600 shadow-xs shrink-0">
-                <FileText className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-base text-slate-800">Order #{activeOrder.id}</h3>
-                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-                    activeOrder.status === 'Delivered' ? 'bg-emerald-100 text-emerald-800' :
-                    activeOrder.status === 'Out for Delivery' ? 'bg-sky-100 text-sky-800' :
-                    activeOrder.status === 'Preparing' ? 'bg-amber-100 text-amber-800' :
-                    activeOrder.status === 'Confirmed' ? 'bg-blue-100 text-blue-800' :
-                    'bg-rose-100 text-rose-800'
-                  }`}>
-                    {activeOrder.status}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">
-                  {activeOrder.date} 2026, {activeOrder.time} • Partner: <strong className="text-slate-700">{activeOrder.hotelName}</strong>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => setShowTimeline(prev => !prev)}
-                className="px-3 py-1.5 bg-white hover:bg-emerald-50 border border-emerald-600 text-emerald-700 font-bold text-xs rounded-lg shadow-2xs cursor-pointer transition-colors"
-              >
-                {showTimeline ? 'Hide Timeline' : 'View Timeline'}
-              </button>
-              <button
-                onClick={handleDownloadInvoice}
-                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" /> Download Invoice
-              </button>
-              <button
-                onClick={() => {
-                  confirmAction({
-                    title: 'Delete Order',
-                    message: `Are you sure you want to permanently delete order #${activeOrder.id}?`,
-                    entityName: `Order #${activeOrder.id} (${activeOrder.hotelName})`,
-                    confirmLabel: 'Delete Order',
-                    type: 'danger',
-                    onConfirm: () => {
-                      deleteOrder(activeOrder.id);
-                    }
-                  });
-                }}
-                className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-semibold rounded-lg cursor-pointer transition-colors"
-                title="Delete Order"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Left: Hotel Details, Payment Info, Delivery Information & Commission */}
-            <div className="lg:col-span-6 space-y-4">
-              {/* Hotel & Joiner Details Box */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={hotelImg}
-                    alt={activeOrder.hotelName}
-                    className="w-12 h-12 rounded-lg object-cover border border-slate-200"
-                  />
-                  <div>
-                    <h4
-                      onClick={() => handleViewHotel(activeOrder.hotelName)}
-                      className="font-bold text-sm text-slate-900 hover:text-emerald-700 cursor-pointer transition-colors"
-                    >
-                      {activeOrder.hotelName}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                      <Phone className="w-3 h-3 text-slate-400" />
-                      <span>{activeOrder.hotelPhone || '9876543210'}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      <span>{activeOrder.zone}, Pune</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-right">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                    alt={activeOrder.joiner}
-                    className="w-8 h-8 rounded-full object-cover border border-emerald-600"
-                  />
-                  <div className="text-left">
-                    <p className="font-bold text-xs text-slate-900 flex items-center gap-1">
-                      {activeOrder.joiner}
-                      {activeOrder.addedBy === 'Admin' && (
-                        <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold">
-                          <Shield className="w-2.5 h-2.5 text-amber-600" /> Admin
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      {activeOrder.addedBy === 'Admin' ? 'Created by Admin' : 'Hotel Joiner'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment & Delivery Information Boxes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <h5 className="font-bold text-slate-800">Payment</h5>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-0.5">
-                      <Check className="w-3 h-3" /> Paid
-                    </span>
-                  </div>
-                  <p className="text-slate-600">Mode: <strong>{activeOrder.paymentMode}</strong> ({activeOrder.paymentMode === 'Online' ? 'Razorpay' : 'COD'})</p>
-                  <p className="text-slate-500 font-mono text-[11px]">Txn: {activeOrder.transactionId || 'pay_N7d9K2h8L1'}</p>
-                </div>
-
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <h5 className="font-bold text-slate-800">Delivery & Driver</h5>
-                    <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-0.5">
-                      <Truck className="w-3 h-3" /> {activeOrder.status}
-                    </span>
-                  </div>
-                  <p className="text-slate-600">Driver: <strong>{activeOrder.driver || 'Not Assigned'}</strong></p>
-                  <p className="text-slate-500 text-[11px]">Contact: {activeOrder.driverPhone || '—'}</p>
-                  <div className="pt-2 flex items-center gap-1.5">
-                    {activeOrder.status !== 'Delivered' && (
-                      <button
-                        onClick={() => {
-                          setAssignModalOrderId(activeOrder.id);
-                          setIsAssignModalOpen(true);
-                        }}
-                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <Truck className="w-3 h-3" /> {activeOrder.driver ? 'Change Driver' : 'Assign Driver'}
-                      </button>
-                    )}
-                    {activeOrder.status !== 'Delivered' && activeOrder.status !== 'Cancelled' && (
-                      <button
-                        onClick={() => updateOrderStatus(activeOrder.id, 'Delivered')}
-                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10.5px] rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <CheckCircle2 className="w-3 h-3" /> Mark Delivered (+₹100)
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Joiner Wallet Bonus / Commission Box */}
-              <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
-                activeOrder.status === 'Delivered' 
-                  ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950' 
-                  : 'bg-amber-50/80 border-amber-200 text-amber-950'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
-                    activeOrder.status === 'Delivered' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-amber-500 text-white shadow-xs'
-                  }`}>
-                    ₹100
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm">
-                        {activeOrder.status === 'Delivered' ? '₹100 Wallet Reward Credited' : '₹100 Delivery Wallet Reward'}
-                      </span>
-                      <span className={`px-2 py-0.5 font-bold text-[10px] rounded-full ${
-                        activeOrder.status === 'Delivered' ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
-                      }`}>
-                        {activeOrder.status === 'Delivered' ? 'Credited to Wallet' : 'Pending Delivery'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] opacity-80 mt-0.5">
-                      {activeOrder.status === 'Delivered' 
-                        ? `₹100 bonus has been credited to ${activeOrder.joiner || 'Partner'}'s digital wallet account.` 
-                        : `Once driver delivers the produce, ₹100 will be instantly added to ${activeOrder.joiner || 'Partner'}'s wallet account.`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Expandable Order Tracking Timeline */}
-              {showTimeline && (
-                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2 animate-in fade-in duration-200">
-                  <h5 className="font-bold text-slate-800 mb-2">Order Tracking Timeline</h5>
-                  <div className="relative pl-5 border-l-2 border-emerald-600 space-y-3">
-                    <div>
-                      <span className="absolute -left-1.5 top-0 w-3 h-3 bg-emerald-600 rounded-full"></span>
-                      <p className="font-bold text-slate-800">Delivered Successfully</p>
-                      <p className="text-[11px] text-slate-400">11 Sep 2026, 12:10 PM • By {activeOrder.driver}</p>
-                    </div>
-                    <div>
-                      <span className="absolute -left-1.5 top-8 w-3 h-3 bg-emerald-600 rounded-full"></span>
-                      <p className="font-bold text-slate-800">Out for Delivery</p>
-                      <p className="text-[11px] text-slate-400">11 Sep 2026, 10:45 AM • Loaded into vehicle</p>
-                    </div>
-                    <div>
-                      <span className="absolute -left-1.5 top-16 w-3 h-3 bg-emerald-600 rounded-full"></span>
-                      <p className="font-bold text-slate-800">Order Confirmed & Packed</p>
-                      <p className="text-[11px] text-slate-400">11 Sep 2026, 10:24 AM • Verified fresh produce</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Order Items & Price Summary */}
-            <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <h4 className="font-bold text-xs text-slate-800">Order Items</h4>
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-semibold">
-                    <th className="py-1 px-1">#</th>
-                    <th className="py-1 px-1">Product</th>
-                    <th className="py-1 px-1 text-center">Qty</th>
-                    <th className="py-1 px-1 text-center">Unit</th>
-                    <th className="py-1 px-1 text-right">Price</th>
-                    <th className="py-1 px-1 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(() => {
-                    const orderItemsList = (activeOrder.items && activeOrder.items.length > 0)
-                      ? activeOrder.items
-                      : [
-                          { id: 1, productName: 'Fresh Red Tomatoes (Grade A)', qty: 25, unit: 'KG', price: 40, total: 1000 },
-                          { id: 2, productName: 'Farm Fresh Onions (Nashik)', qty: 30, unit: 'KG', price: 35, total: 1050 },
-                          { id: 3, productName: 'Green Coriander & Herbs', qty: 15, unit: 'Bunch', price: 30, total: 450 }
-                        ];
-
-                    return orderItemsList.map((item: any, idx: number) => {
-                      const pName = item.productName || item.name || item.title || `Produce Item ${idx + 1}`;
-                      const pQty = Number(item.qty ?? item.quantity ?? 1);
-                      const pUnit = item.unit || 'KG';
-                      const pPrice = Number(item.price ?? 30);
-                      const pTotal = Number(item.total ?? (pQty * pPrice));
-                      const itemImg = item.image || resolveProductImage(pName, 'Vegetables');
-
-                      return (
-                        <tr key={item.id || idx} className="hover:bg-slate-100/60 transition-colors">
-                          <td className="py-2.5 px-1 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                          <td className="py-2.5 px-1">
-                            <div className="flex items-center gap-2.5">
-                              <img
-                                src={itemImg}
-                                alt={pName}
-                                className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=200';
-                                }}
-                              />
-                              <div>
-                                <span className="font-bold text-slate-900 text-xs block">{pName}</span>
-                                <span className="text-[10px] text-slate-400">Fresh Produce</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-1 text-center font-bold text-slate-800">{pQty}</td>
-                          <td className="py-2.5 px-1 text-center text-slate-500 font-medium">{pUnit}</td>
-                          <td className="py-2.5 px-1 text-right text-slate-700 font-semibold">₹{pPrice}</td>
-                          <td className="py-2.5 px-1 text-right font-bold text-slate-900">₹{pTotal.toLocaleString('en-IN')}</td>
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
-
-              {/* Price Breakdown */}
-              <div className="pt-2 border-t border-slate-100 text-xs space-y-1.5">
-                <div className="flex justify-between text-slate-500">
-                  <span>Subtotal</span>
-                  <span className="font-semibold text-slate-700">
-                    ₹{((activeOrder.items && activeOrder.items.length > 0)
-                      ? activeOrder.items.reduce((sum: number, it: any) => sum + Number(it.total ?? ((it.qty ?? it.quantity ?? 1) * (it.price ?? 0))), 0)
-                      : (activeOrder.subtotal || activeOrder.amount || 2500)
-                    ).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Delivery Charge</span>
-                  <span className="font-semibold text-slate-700">₹{activeOrder.deliveryCharge || 0}</span>
-                </div>
-                {Boolean(activeOrder.discount && activeOrder.discount > 0) && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Discount</span>
-                    <span className="font-semibold text-rose-600">- ₹{activeOrder.discount}</span>
-                  </div>
-                )}
-                
-                {/* Total Amount Green Highlight */}
-                <div className="flex justify-between items-center bg-emerald-50 text-emerald-900 font-extrabold text-sm py-2 px-3 rounded-lg border border-emerald-100">
-                  <span>Total Amount</span>
-                  <span className="text-base text-emerald-800">₹{Number(activeOrder.totalAmount ?? activeOrder.amount ?? 0).toLocaleString('en-IN')}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Produce Item Inspection Modal */}
+      {inspectProduceData && (
+        <ProduceItemInspectModal
+          data={inspectProduceData}
+          onClose={() => setInspectProduceData(null)}
+          onToggleInspected={(productId) => {
+            const key = `${inspectProduceData.orderId}_${productId}`;
+            handleToggleItemVerified(key);
+          }}
+        />
       )}
 
-      {/* Bottom Promo Banner */}
-      <div className="bg-emerald-700 text-white p-4 rounded-2xl flex items-center justify-between shadow-md">
-        <div>
-          <h3 className="font-extrabold text-lg">Together We Grow</h3>
-          <p className="text-xs text-emerald-100 mt-0.5">
-            Connecting Hotels with Fresh Produce • More Orders • Stronger Partnerships • A Healthier Tomorrow
-          </p>
-        </div>
-        <span className="text-3xl">🧺🥬🥕</span>
-      </div>
-
-      {/* Create Order Modal */}
-      {isCreateOrderOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-800">Create New Order</h3>
-                  <p className="text-[11px] text-slate-500">Generate fresh vegetable produce order for partner hotel</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsCreateOrderOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateOrderSubmit} className="mt-3 space-y-3 text-xs overflow-y-auto pr-1 flex-1">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select Hotel Partner *</label>
-                <select
-                  value={newHotelName}
-                  onChange={e => setNewHotelName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
-                >
-                  {hotels.map(h => (
-                    <option key={h.id} value={h.name}>{h.name} — {h.zone} ({h.joiner || 'Partner'})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Mode</label>
-                  <select
-                    value={newPaymentMode}
-                    onChange={e => setNewPaymentMode(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
-                  >
-                    <option value="Online">Online (Razorpay / UPI)</option>
-                    <option value="COD">Cash on Delivery (COD)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Assign Delivery Driver</label>
-                  <select
-                    value={newDriver}
-                    onChange={e => setNewDriver(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none font-medium text-slate-800 cursor-pointer"
-                  >
-                    {drivers.map(d => (
-                      <option key={d.id} value={d.name}>{d.name} ({d.zone})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Order Produce Items Section */}
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span>Order Items</span>
-                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      {newOrderItems.length} Products
-                    </span>
-                  </label>
-                  <span className="text-[11px] font-bold text-emerald-700">
-                    Total: ₹{newOrderItems.reduce((s, i) => s + (i.qty * i.price), 0).toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                {/* Items List */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
-                  {newOrderItems.map(item => (
-                    <div key={item.id} className="p-2.5 flex items-center justify-between gap-2 bg-white">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-slate-800 truncate text-xs">{item.productName}</p>
-                        <p className="text-[10.5px] text-slate-500">₹{item.price}/{item.unit} • Subtotal: <strong className="text-slate-800">₹{item.qty * item.price}</strong></p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItemQty(item.id, -5)}
-                            className="px-2 py-0.5 text-slate-600 hover:text-emerald-700 font-bold cursor-pointer"
-                          >
-                            -
-                          </button>
-                          <span className="px-2 font-mono font-bold text-slate-800 text-[11px]">{item.qty} {item.unit}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItemQty(item.id, 5)}
-                            className="px-2 py-0.5 text-slate-600 hover:text-emerald-700 font-bold cursor-pointer"
-                          >
-                            +
-                          </button>
-                        </div>
-                        {newOrderItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItemFromNewOrder(item.id)}
-                            className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
-                            title="Remove"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Quick Add Product */}
-                <div className="flex items-center gap-2 pt-1">
-                  <select
-                    value={selectedCatalogProduct}
-                    onChange={e => setSelectedCatalogProduct(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-emerald-600"
-                  >
-                    <option value="">+ Add from catalog...</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.name}>{p.name} (₹{p.price}/{p.unit || 'KG'})</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!selectedCatalogProduct) return;
-                      const foundProd = products.find(p => p.name === selectedCatalogProduct);
-                      if (foundProd) {
-                        const prodPrice = Number(foundProd.price || 30);
-                        handleAddItemToNewOrder(foundProd.name, prodPrice, foundProd.unit || 'KG');
-                        setSelectedCatalogProduct('');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold rounded-xl border border-slate-200 cursor-pointer transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 text-emerald-800 text-[11px] font-medium flex items-center justify-between">
-                <span>🥬 <strong>4:00 AM Fresh Harvest Guarantee</strong></span>
-                <span className="font-bold">₹100 Joiner Bonus Eligible</span>
-              </div>
-
-              <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                <div>
-                  <p className="text-[10.5px] text-slate-500">Order Total</p>
-                  <p className="text-base font-black text-emerald-800">
-                    ₹{newOrderItems.reduce((s, i) => s + (i.qty * i.price), 0).toLocaleString('en-IN')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateOrderOpen(false)}
-                    className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold cursor-pointer text-xs"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-xl font-bold shadow-xs cursor-pointer text-xs transition-all active:scale-[0.98]"
-                  >
-                    Create & Place Order
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* Driver Assignment Modal */}
+      {isAssignModalOpen && (
+        <AssignOrderModal
+          preSelectedOrderId={assignModalOrderId}
+          isOpen={isAssignModalOpen}
+          onClose={() => {
+            setIsAssignModalOpen(false);
+            setAssignModalOrderId(undefined);
+          }}
+        />
       )}
-
-      {/* Assign Driver Modal */}
-      <AssignOrderModal
-        isOpen={isAssignModalOpen}
-        onClose={() => {
-          setIsAssignModalOpen(false);
-          setAssignModalOrderId(undefined);
-        }}
-        preSelectedOrderId={assignModalOrderId}
-      />
     </div>
   );
 };

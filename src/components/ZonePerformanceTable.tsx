@@ -1,11 +1,18 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 
+const normalizeStr = (s?: string) =>
+  (s || '')
+    .toLowerCase()
+    .replace(/[\s\-_,]+/g, ' ')
+    .replace(/zone/g, '')
+    .trim();
+
 export const ZonePerformanceTable: React.FC = () => {
-  const { setActiveTab, zones, setSelectedZone, hotels, joiners, orders, isDatabaseConnected } = useApp();
+  const { setActiveTab, zones, setSelectedZone, hotels, joiners, orders } = useApp();
 
   const handleZoneClick = (zoneName: string) => {
-    const matched = zones.find(z => z.name.toLowerCase() === zoneName.toLowerCase());
+    const matched = zones.find(z => normalizeStr(z.name) === normalizeStr(zoneName));
     if (matched) {
       setSelectedZone(matched);
     }
@@ -13,11 +20,27 @@ export const ZonePerformanceTable: React.FC = () => {
   };
 
   const zonesData = zones.map(z => {
-    const zoneHotels = hotels.filter(h => (h.zone || '').trim().toLowerCase() === (z.name || '').trim().toLowerCase()).length;
-    const zoneJoiners = joiners.filter(j => (j.zone || '').trim().toLowerCase() === (z.name || '').trim().toLowerCase()).length;
-    const zoneOrders = orders.filter(o => (o.zone || '').trim().toLowerCase() === (z.name || '').trim().toLowerCase());
-    const deliveredCount = zoneOrders.filter(o => o.status === 'Delivered').length;
-    const totalSales = zoneOrders.reduce((acc, o) => acc + (Number(o.amount) || 0), 0);
+    const zName = normalizeStr(z.name);
+    const zAreas = (z.areaLocations || '').toLowerCase();
+
+    const zoneHotels = hotels.filter(h => {
+      const hZone = normalizeStr(h.zone);
+      return hZone === zName || (zName && hZone.includes(zName)) || (zAreas && zAreas.includes(hZone));
+    }).length;
+
+    const zoneJoiners = joiners.filter(j => {
+      const jZone = normalizeStr(j.zone);
+      return jZone === zName || (zName && jZone.includes(zName)) || (zAreas && zAreas.includes(jZone));
+    }).length;
+
+    const zoneOrders = orders.filter(o => {
+      const oZone = normalizeStr(o.zone || o.zoneName || o.hotelZone);
+      return oZone === zName || (zName && oZone.includes(zName)) || (zAreas && zAreas.includes(oZone));
+    });
+
+    const deliveredCount = zoneOrders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
+    const totalSales = zoneOrders.reduce((acc, o) => acc + (Number(o.amount || o.totalAmount) || 0), 0);
+
     return {
       zone: z.name,
       hotels: zoneHotels,
@@ -93,7 +116,7 @@ export const ZonePerformanceTable: React.FC = () => {
                   {zonesData.reduce((acc, z) => acc + z.delivered, 0)}
                 </td>
                 <td className="py-2 px-1.5 text-right text-[#168a44]">
-                  ₹{orders.reduce((acc, o) => acc + (Number(o.amount) || 0), 0).toLocaleString('en-IN')}
+                  ₹{orders.reduce((acc, o) => acc + (Number(o.amount || o.totalAmount) || 0), 0).toLocaleString('en-IN')}
                 </td>
               </tr>
             )}

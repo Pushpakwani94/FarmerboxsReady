@@ -16,7 +16,7 @@ import {
   Tag,
   Check
 } from 'lucide-react';
-import { useJoinerApp, getProductImageFallback } from '../JoinerAppContext';
+import { useJoinerApp, getProductImageFallback, deduplicateMobileHotels } from '../JoinerAppContext';
 import type { MobileProduct } from '../JoinerAppContext';
 
 interface CategoryOption {
@@ -42,6 +42,8 @@ export const PlaceOrderScreen: React.FC = () => {
     cartTotal
   } = useJoinerApp();
 
+  const uniqueHotels = useMemo(() => deduplicateMobileHotels(hotels), [hotels]);
+
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [selectedCatalogMode, setSelectedCatalogMode] = useState<'ALL' | 'B2B' | 'B2C'>('B2B');
   const [viewMode, setViewMode] = useState<'LIST' | 'GRID'>('GRID');
@@ -49,12 +51,12 @@ export const PlaceOrderScreen: React.FC = () => {
   const [isHotelDropdownOpen, setIsHotelDropdownOpen] = useState(false);
 
   useEffect(() => {
-    if (!selectedHotel && hotels.length > 0) {
-      setSelectedHotel(hotels[0]);
+    if (!selectedHotel && uniqueHotels.length > 0) {
+      setSelectedHotel(uniqueHotels[0]);
     }
-  }, [hotels, selectedHotel, setSelectedHotel]);
+  }, [uniqueHotels, selectedHotel, setSelectedHotel]);
 
-  const currentHotel = selectedHotel || (hotels.length > 0 ? hotels[0] : null);
+  const currentHotel = selectedHotel || (uniqueHotels.length > 0 ? uniqueHotels[0] : null);
 
   const categories: CategoryOption[] = [
     {
@@ -329,7 +331,7 @@ export const PlaceOrderScreen: React.FC = () => {
           {isHotelDropdownOpen && (
             <div className="mt-2.5 pt-2.5 border-t border-slate-100 space-y-1 max-h-48 overflow-y-auto">
               <p className="text-[10px] font-bold text-slate-400 mb-1">Select Hotel:</p>
-              {hotels.map(h => (
+              {uniqueHotels.map(h => (
                 <button
                   key={h.id}
                   onClick={() => {

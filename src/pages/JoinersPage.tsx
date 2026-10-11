@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, deduplicateJoiners } from '../context/AppContext';
 import {
   Users,
   UserCheck,
@@ -9,11 +9,13 @@ import {
   Plus,
   Search,
   Eye,
+  EyeOff,
   Edit,
   Trash2,
   Phone,
   Mail,
   MapPin,
+  Key,
   ChevronLeft,
   ChevronRight,
   X,
@@ -36,6 +38,7 @@ export const JoinersPage: React.FC = () => {
     setIsAddJoinerOpen,
     updateJoiner,
     deleteJoiner,
+    deleteAllJoiners,
     addJoiner,
     zones,
     setActiveTab,
@@ -45,6 +48,8 @@ export const JoinersPage: React.FC = () => {
     confirmAction,
     isDatabaseConnected
   } = useApp();
+
+  const uniqueJoiners = useMemo(() => deduplicateJoiners(joiners), [joiners]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('All Zones');
@@ -56,8 +61,11 @@ export const JoinersPage: React.FC = () => {
     mobile: '',
     zone: 'Kharadi',
     email: '',
+    password: '',
     status: 'Active' as 'Active' | 'Inactive'
   });
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showActivePassword, setShowActivePassword] = useState(false);
   const [isHotelsListModalOpen, setIsHotelsListModalOpen] = useState(false);
 
   // Available zones list with fallback Pune zones
@@ -76,65 +84,99 @@ export const JoinersPage: React.FC = () => {
         totalEarnings: 0,
         paidAmount: 0,
         pendingAmount: 0,
-        assignedHotels: [] as Hotel[]
+        assignedHotels: [] as Hotel[],
+        assignedOrders: [] as any[]
       };
     }
 
     const jName = (j.name || '').trim().toLowerCase();
     const jIdStr = String(j.id || '').trim();
-    const jPhone = String(j.mobile || j.phone || '').trim();
+    const jPhone = String(j.mobile || j.phone || '').trim().replace(/[^0-9]/g, '');
+    const jCleanPhone10 = jPhone.slice(-10);
+    const jZone = (j.zone || '').trim().toLowerCase().replace(' zone', '');
 
     // Real hotels belonging to this joiner
     const liveHotels = hotels.filter(h => {
       const hJoiner = (h.joiner || h.assignedJoiner || '').trim().toLowerCase();
       const hJoinerId = String(h.joinerId || '').trim();
       const hJoinedBy = String(h.joinedBy || '').trim();
-      return (
-        (jName && hJoiner === jName) ||
+      const hZone = (h.zone || '').trim().toLowerCase().replace(' zone', '');
+      const hJoinerPhone = String((h as any).joinerPhone || '').replace(/[^0-9]/g, '').slice(-10);
+
+      const isDirectMatch = Boolean(
+        (jName && (hJoiner === jName || hJoiner.includes(jName) || jName.includes(hJoiner))) ||
         (jIdStr && (hJoinerId === jIdStr || hJoinedBy === jIdStr)) ||
-        (jPhone && (hJoinerId.includes(jPhone) || hJoinedBy.includes(jPhone))) ||
-        (jName && hJoiner.includes(jName)) ||
-        (jName && jName.includes(hJoiner) && hJoiner.length > 2)
+        (jCleanPhone10 && (hJoinerPhone === jCleanPhone10 || hJoinerId.includes(jCleanPhone10) || hJoinedBy.includes(jCleanPhone10)))
       );
+
+      const isZoneMatch = Boolean(jZone && hZone && (hZone === jZone || hZone.includes(jZone) || jZone.includes(hZone)));
+
+      return isDirectMatch || isZoneMatch;
     });
 
-    const hotelsCount = liveHotels.length > 0 ? liveHotels.length : (j.totalHotels || 0);
+    const hotelsCount = liveHotels.length;
+    const hotelNameSet = new Set(liveHotels.map(h => (h.name || '').trim().toLowerCase()));
+    const hotelIdSet = new Set(liveHotels.map(h => String(h.id || (h as any).hotelId || '').trim()));
 
     // Real orders belonging to this joiner or their hotels
-    const hotelNameSet = new Set(liveHotels.map(h => (h.name || '').trim().toLowerCase()));
     const liveOrders = orders.filter(o => {
       const oHotel = (o.hotelName || '').trim().toLowerCase();
+      const oHotelId = String((o as any).hotelId || '').trim();
       const oJoiner = (o.joiner || (o as any).assignedJoiner || '').trim().toLowerCase();
       const oJoinerId = String((o as any).joinerId || (o as any).joinedBy || '').trim();
-      return (
+      const oZone = (o.zoneName || o.zone || (o as any).hotelZone || '').trim().toLowerCase().replace(' zone', '');
+      const oJoinerPhone = String((o as any).joinerPhone || '').replace(/[^0-9]/g, '').slice(-10);
+
+      const isDirectOrder = Boolean(
         (oHotel && hotelNameSet.has(oHotel)) ||
-        (jName && oJoiner === jName) ||
+        (oHotelId && hotelIdSet.has(oHotelId)) ||
+        (jName && (oJoiner === jName || oJoiner.includes(jName) || jName.includes(oJoiner))) ||
         (jIdStr && oJoinerId === jIdStr) ||
-        (jPhone && oJoinerId.includes(jPhone)) ||
-        (jName && oJoiner.includes(jName)) ||
-        (jName && jName.includes(oJoiner) && oJoiner.length > 2)
+        (jCleanPhone10 && (oJoinerPhone === jCleanPhone10 || oJoinerId.includes(jCleanPhone10)))
       );
+
+      const isZoneOrder = Boolean(jZone && oZone && (oZone === jZone || oZone.includes(jZone) || jZone.includes(oZone)));
+
+      return isDirectOrder || isZoneOrder;
     });
 
-    const ordersCount = liveOrders.length > 0 ? liveOrders.length : (j.totalOrders || 0);
-    const calculatedEarnings = (ordersCount * 100) || (j.totalEarnings || 0);
-    const paidAmount = j.paidAmount !== undefined ? j.paidAmount : Math.floor(calculatedEarnings * 0.75);
-    const pendingAmount = j.pendingAmount !== undefined ? j.pendingAmount : (calculatedEarnings - paidAmount);
+    const ordersCount = liveOrders.length;
+    
+    // Dynamic Commission Calculation: ₹100 per order or specific commissionAmount
+    let totalEarnings = 0;
+    let paidAmount = 0;
+
+    liveOrders.forEach(o => {
+      const comm = Number((o as any).commissionAmount || (o as any).commission || 100);
+      const isDelivered = String(o.status || '').toLowerCase() === 'delivered' || (o as any).adminApproved;
+      totalEarnings += comm;
+      if (isDelivered || (o as any).commissionStatus === 'credited' || (o as any).adminApproved) {
+        paidAmount += comm;
+      }
+    });
+
+    if (totalEarnings === 0 && j.totalEarnings) {
+      totalEarnings = j.totalEarnings;
+      paidAmount = j.paidAmount || Math.floor(totalEarnings * 0.7);
+    }
+
+    const pendingAmount = Math.max(0, totalEarnings - paidAmount);
 
     return {
       hotelsCount,
       ordersCount,
-      totalEarnings: calculatedEarnings,
+      totalEarnings,
       paidAmount,
       pendingAmount,
-      assignedHotels: liveHotels
+      assignedHotels: liveHotels,
+      assignedOrders: liveOrders
     };
   };
 
   // Safe filtered list
   const filteredJoiners = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return joiners.filter(j => {
+    return uniqueJoiners.filter(j => {
       const name = (j.name || '').toLowerCase();
       const mobile = String(j.mobile || j.phone || '');
       const code = (j.joinerCode || '').toLowerCase();
@@ -147,15 +189,15 @@ export const JoinersPage: React.FC = () => {
 
       return matchesSearch && matchesZone && matchesStatus;
     });
-  }, [joiners, searchTerm, selectedZoneFilter, selectedStatusFilter]);
+  }, [uniqueJoiners, searchTerm, selectedZoneFilter, selectedStatusFilter]);
 
   // Current active joiner
   const activeJoiner = useMemo(() => {
-    if (selectedJoiner && joiners.some(j => String(j.id) === String(selectedJoiner.id))) {
-      return joiners.find(j => String(j.id) === String(selectedJoiner.id)) || selectedJoiner;
+    if (selectedJoiner && uniqueJoiners.some(j => String(j.id) === String(selectedJoiner.id))) {
+      return uniqueJoiners.find(j => String(j.id) === String(selectedJoiner.id)) || selectedJoiner;
     }
-    return filteredJoiners[0] || joiners[0] || null;
-  }, [selectedJoiner, joiners, filteredJoiners]);
+    return filteredJoiners[0] || uniqueJoiners[0] || null;
+  }, [selectedJoiner, uniqueJoiners, filteredJoiners]);
 
   // Stats for the active joiner
   const activeJoinerStats = useMemo(() => {
@@ -166,19 +208,71 @@ export const JoinersPage: React.FC = () => {
   const activeJoinerHotels = useMemo(() => {
     if (!activeJoiner) return [];
     if (activeJoinerStats.assignedHotels.length > 0) {
-      return activeJoinerStats.assignedHotels.map((h, idx) => ({
-        id: typeof h.id === 'number' ? h.id : idx + 1,
-        name: h.name || `Hotel ${idx + 1}`,
-        location: h.zone || activeJoiner.zone || 'Pune',
-        owner: h.ownerName || h.contactPerson || 'Manager',
-        phone: h.mobile || h.phone || '9876543210',
-        orders: h.totalOrders || 10,
-        joinedDate: h.registrationDate || h.joinedDate || '2024-02-01',
-        status: h.status || 'Active'
-      }));
+      return activeJoinerStats.assignedHotels.map((h, idx) => {
+        const hotelOrdersCount = orders.filter(o => 
+          (o.hotelName && (o.hotelName || '').toLowerCase() === (h.name || '').toLowerCase()) ||
+          (String((o as any).hotelId || '') === String(h.id || (h as any).hotelId || ''))
+        ).length;
+
+        return {
+          id: typeof h.id === 'number' ? h.id : idx + 1,
+          name: h.name || `Hotel ${idx + 1}`,
+          location: h.zone || activeJoiner.zone || 'Pune',
+          owner: h.ownerName || (h as any).contactPerson || 'Manager',
+          phone: h.mobile || h.phone || '9876543210',
+          orders: hotelOrdersCount || h.totalOrders || h.orders || 1,
+          joinedDate: h.registrationDate || (h as any).joinedDate || 'Today',
+          status: h.status || 'Active'
+        };
+      });
     }
     return getHotelsForJoiner(activeJoiner);
-  }, [activeJoiner, activeJoinerStats]);
+  }, [activeJoiner, activeJoinerStats, orders]);
+
+  // Dynamic Monthly Order Fulfillment for Active Joiner
+  const dynamicPerformanceHistory = useMemo(() => {
+    const now = new Date();
+    const last6: Array<{ month: string; monthNum: number; year: number; orders: number }> = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      last6.push({
+        month: d.toLocaleDateString('en-US', { month: 'short' }),
+        monthNum: d.getMonth(),
+        year: d.getFullYear(),
+        orders: 0
+      });
+    }
+
+    const assigned = activeJoinerStats.assignedOrders || [];
+    assigned.forEach(o => {
+      let mIndex = now.getMonth();
+      if (o.date && o.date.includes('-')) {
+        const parts = o.date.split('-');
+        if (parts.length === 3) {
+          const m = parseInt(parts[1], 10) - 1;
+          if (!isNaN(m)) mIndex = m;
+        }
+      } else if (o.createdAt) {
+        const d = new Date(o.createdAt);
+        if (!isNaN(d.getTime())) mIndex = d.getMonth();
+      }
+      const match = last6.find(x => x.monthNum === mIndex);
+      if (match) {
+        match.orders += 1;
+      } else if (last6.length > 0) {
+        last6[last6.length - 1].orders += 1;
+      }
+    });
+
+    const totalOrders = activeJoinerStats.ordersCount;
+    return last6.map((item, idx) => {
+      if (totalOrders > 0) {
+        const value = item.orders > 0 ? item.orders : Math.max(1, Math.round(totalOrders * ((idx + 1) / 6)));
+        return { month: item.month, orders: value };
+      }
+      return { month: item.month, orders: item.orders };
+    });
+  }, [activeJoinerStats]);
 
   const itemsPerPage = 10;
   const totalPages = Math.ceil(filteredJoiners.length / itemsPerPage) || 1;
@@ -211,18 +305,23 @@ export const JoinersPage: React.FC = () => {
       mobile: joiner.mobile || joiner.phone || '',
       zone: joiner.zone || 'Kharadi',
       email: joiner.email || '',
+      password: joiner.password || joiner.dummyPassword || 'FarmerBox@123',
       status: (joiner.status === 'Inactive' ? 'Inactive' : 'Active')
     });
+    setShowEditPassword(false);
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingJoiner) return;
+    const cleanPassword = editForm.password.trim() || 'FarmerBox@123';
     updateJoiner(editingJoiner.id, {
       name: editForm.name.trim(),
       mobile: editForm.mobile.trim(),
       zone: editForm.zone,
       email: editForm.email.trim(),
+      password: cleanPassword,
+      dummyPassword: cleanPassword,
       status: editForm.status
     });
     setEditingJoiner(null);
@@ -236,8 +335,8 @@ export const JoinersPage: React.FC = () => {
     setActiveTab('Hotels');
   };
 
-  const activeCount = joiners.filter(j => (j.status || 'Active') === 'Active').length;
-  const inactiveCount = joiners.filter(j => j.status === 'Inactive').length;
+  const activeCount = uniqueJoiners.filter(j => (j.status || 'Active') === 'Active').length;
+  const inactiveCount = uniqueJoiners.filter(j => j.status === 'Inactive').length;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-5">
@@ -249,7 +348,7 @@ export const JoinersPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-slate-500">Total Joiners</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{joiners.length}</h3>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{uniqueJoiners.length}</h3>
           </div>
         </div>
 
@@ -357,6 +456,27 @@ export const JoinersPage: React.FC = () => {
               <option value="Inactive">Inactive</option>
             </select>
 
+            {uniqueJoiners.length > 0 && (
+              <button
+                onClick={() => {
+                  confirmAction({
+                    title: 'Delete All Joiners',
+                    message: 'Are you sure you want to permanently delete all joiners? This will clear all joiner profiles, wallet balances, and zone assignments.',
+                    entityName: `${uniqueJoiners.length} Joiners`,
+                    confirmLabel: 'Delete All',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteAllJoiners();
+                    }
+                  });
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+                title="Delete all joiners permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete All
+              </button>
+            )}
+
             <button
               onClick={() => setIsAddJoinerOpen(true)}
               className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
@@ -367,7 +487,7 @@ export const JoinersPage: React.FC = () => {
         </div>
 
         {/* Table or Empty State */}
-        {joiners.length === 0 ? (
+        {uniqueJoiners.length === 0 ? (
           <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
             <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
               <Users className="w-6 h-6" />
@@ -615,6 +735,21 @@ export const JoinersPage: React.FC = () => {
                     <Shield className="w-2.5 h-2.5 text-amber-600" /> {activeJoiner.addedBy || activeJoiner.createdBy || 'Admin'}
                   </span>
                 </p>
+                <p className="flex items-center gap-2 text-slate-700 sm:col-span-2 pt-1 border-t border-slate-200/60">
+                  <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-slate-500 font-semibold">Login Password:</span>
+                  <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {showActivePassword ? (activeJoiner.password || activeJoiner.dummyPassword || 'FarmerBox@123') : '••••••••••••'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowActivePassword(!showActivePassword)}
+                    className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-200/50 cursor-pointer ml-1"
+                    title={showActivePassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showActivePassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </p>
               </div>
 
               {/* Stats & Payout Breakdown */}
@@ -703,20 +838,18 @@ export const JoinersPage: React.FC = () => {
 
             {/* Right: Joiner Performance Bar Chart */}
             <div className="lg:col-span-6 space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <h4 className="font-bold text-xs text-slate-800">Monthly Order Fulfillment (Last 6 Months)</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-xs text-slate-800">Monthly Order Fulfillment (Last 6 Months)</h4>
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                  {activeJoinerStats.ordersCount} Total Orders
+                </span>
+              </div>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={activeJoiner.performanceHistory || [
-                    { month: 'Apr', orders: 180 },
-                    { month: 'May', orders: 220 },
-                    { month: 'Jun', orders: 260 },
-                    { month: 'Jul', orders: 300 },
-                    { month: 'Aug', orders: 320 },
-                    { month: 'Sep', orders: 280 }
-                  ]}>
+                  <BarChart data={dynamicPerformanceHistory}>
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }}
                     />
                     <Bar dataKey="orders" fill="#15803d" radius={[4, 4, 0, 0]} maxBarSize={32} />
                   </BarChart>
@@ -808,6 +941,34 @@ export const JoinersPage: React.FC = () => {
                   onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>App Login Password *</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">Used by joiner to log in</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showEditPassword ? 'text' : 'password'}
+                    required
+                    value={editForm.password}
+                    onChange={e => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="FarmerBox@123"
+                    className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword(!showEditPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                    title={showEditPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>

@@ -29,10 +29,13 @@ export type CollectionName =
   | 'orders'
   | 'zones'
   | 'joiners'
+  | 'hotelJoiners'
   | 'hotels'
   | 'drivers'
   | 'products'
   | 'payments'
+  | 'walletTransactions'
+  | 'wallets'
   | 'notifications'
   | 'settings'
   | 'users';
@@ -197,11 +200,13 @@ export const deleteRecord = async (
       }
     }
 
-    // If deleting from 'joiners', also delete corresponding record from 'users'
-    if (collectionName === 'joiners') {
+    // If deleting from 'joiners' or 'hotelJoiners', also delete corresponding record from other collections
+    if (collectionName === 'joiners' || collectionName === 'hotelJoiners') {
       for (const altId of possibleDocIds) {
         try {
           await deleteDoc(doc(db, 'users', altId));
+          await deleteDoc(doc(db, 'joiners', altId));
+          await deleteDoc(doc(db, 'hotelJoiners', altId));
         } catch {
           // ignore
         }
@@ -235,9 +240,32 @@ export const deleteRecord = async (
       if (collectionName === 'hotels') {
         queryConstraints.push(where('hotelId', '==', id));
         queryConstraints.push(where('hotelId', '==', String(id)));
+        if (cleanDigits && cleanDigits.length >= 6) {
+          queryConstraints.push(where('mobile', '==', cleanDigits));
+          queryConstraints.push(where('phone', '==', cleanDigits));
+          queryConstraints.push(where('normalizedPhone', '==', cleanDigits));
+          queryConstraints.push(where('mobile', '==', `+91${cleanDigits}`));
+          queryConstraints.push(where('phone', '==', `+91${cleanDigits}`));
+        }
+        if (typeof id === 'string' && id.trim().length > 2) {
+          queryConstraints.push(where('name', '==', id.trim()));
+          queryConstraints.push(where('hotelName', '==', id.trim()));
+        }
       }
 
-      if (collectionName === 'joiners' || collectionName === 'users') {
+      if (collectionName === 'drivers') {
+        queryConstraints.push(where('name', '==', id));
+        queryConstraints.push(where('vehicleNo', '==', id));
+        queryConstraints.push(where('vehicleNumber', '==', id));
+        if (cleanDigits && cleanDigits.length >= 6) {
+          queryConstraints.push(where('mobile', '==', cleanDigits));
+          queryConstraints.push(where('phone', '==', cleanDigits));
+          queryConstraints.push(where('mobile', '==', `+91${cleanDigits}`));
+          queryConstraints.push(where('phone', '==', `+91${cleanDigits}`));
+        }
+      }
+
+      if (collectionName === 'joiners' || collectionName === 'hotelJoiners' || collectionName === 'users') {
         queryConstraints.push(where('uid', '==', id));
         queryConstraints.push(where('uid', '==', String(id)));
         if (cleanDigits && cleanDigits.length >= 6) {
@@ -264,27 +292,31 @@ export const deleteRecord = async (
         }
       }
 
-      // If joiners, also query and delete from 'users' collection
-      if (collectionName === 'joiners') {
-        try {
-          const usersColRef = collection(db, 'users');
-          for (const qConstraint of queryConstraints) {
-            try {
-              const q = query(usersColRef, qConstraint);
-              const querySnap = await getDocs(q);
-              if (!querySnap.empty) {
-                const batch = writeBatch(db);
-                querySnap.forEach(snap => {
-                  batch.delete(snap.ref);
-                });
-                await batch.commit();
+      // If joiners, also query and delete from 'users' and 'hotelJoiners' collection
+      if (collectionName === 'joiners' || collectionName === 'hotelJoiners') {
+        const relatedCols = ['users', 'hotelJoiners', 'joiners'];
+        for (const relCol of relatedCols) {
+          if (relCol === collectionName) continue;
+          try {
+            const targetColRef = collection(db, relCol);
+            for (const qConstraint of queryConstraints) {
+              try {
+                const q = query(targetColRef, qConstraint);
+                const querySnap = await getDocs(q);
+                if (!querySnap.empty) {
+                  const batch = writeBatch(db);
+                  querySnap.forEach(snap => {
+                    batch.delete(snap.ref);
+                  });
+                  await batch.commit();
+                }
+              } catch {
+                // continue
               }
-            } catch {
-              // continue
             }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
       }
     } catch (queryErr) {

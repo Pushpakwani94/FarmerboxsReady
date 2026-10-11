@@ -39,8 +39,7 @@ export const MobileDeviceSimulator: React.FC = () => {
   const screenList: Array<{ id: MobileScreen; label: string; num: number; isProtected?: boolean }> = [
     { id: 'SPLASH', label: '✨ 0. Splash Animation', num: 0 },
     { id: 'WELCOME', label: '1. Welcome Landing', num: 1 },
-    { id: 'LOGIN', label: '🔑 Login Page', num: 2 },
-    { id: 'REGISTER', label: '📝 Registration Page', num: 3 },
+    { id: 'LOGIN', label: '🔑 Login Page (Admin Onboarded)', num: 2 },
     { id: 'DASHBOARD', label: '2. Dashboard', num: 4, isProtected: true },
     { id: 'MY_HOTELS', label: '3. My Hotels (CRUD)', num: 5, isProtected: true },
     { id: 'ADD_HOTEL', label: '4. Add Hotel', num: 6, isProtected: true },

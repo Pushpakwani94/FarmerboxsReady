@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   AlertTriangle
 } from 'lucide-react';
-import { useJoinerApp } from '../JoinerAppContext';
+import { useJoinerApp, deduplicateMobileHotels } from '../JoinerAppContext';
 import type { MobileHotel } from '../JoinerAppContext';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 
@@ -26,6 +26,8 @@ export const MyHotelsScreen: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusChangeToast, setStatusChangeToast] = useState<{ hotelName: string; status: string } | null>(null);
+
+  const uniqueHotels = useMemo(() => deduplicateMobileHotels(hotels), [hotels]);
 
   // Edit Hotel Modal State
   const [editingHotel, setEditingHotel] = useState<MobileHotel | null>(null);
@@ -43,9 +45,9 @@ export const MyHotelsScreen: React.FC = () => {
   const [hotelToDelete, setHotelToDelete] = useState<MobileHotel | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const allCount = hotels.length;
-  const activeCount = hotels.filter(h => h.status === 'Active').length;
-  const inactiveCount = hotels.filter(h => h.status !== 'Active').length;
+  const allCount = uniqueHotels.length;
+  const activeCount = uniqueHotels.filter(h => h.status === 'Active').length;
+  const inactiveCount = uniqueHotels.filter(h => h.status !== 'Active').length;
 
   const filterTabs = [
     { label: `All (${allCount})`, value: 'All' },
@@ -53,7 +55,7 @@ export const MyHotelsScreen: React.FC = () => {
     { label: `Inactive (${inactiveCount})`, value: 'Inactive' }
   ];
 
-  const filteredHotels = hotels.filter(h => {
+  const filteredHotels = uniqueHotels.filter(h => {
     const isHotelActive = h.status === 'Active';
     const matchesFilter =
       activeFilter === 'All' ||

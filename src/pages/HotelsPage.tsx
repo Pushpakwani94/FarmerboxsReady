@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp, deduplicateHotels, deduplicateJoiners } from '../context/AppContext';
 import type { Hotel } from '../types';
+import { hotelService } from '../firebase/services/hotelService';
 import {
   Building2,
   UserCheck,
@@ -35,10 +36,14 @@ export const HotelsPage: React.FC = () => {
     joiners,
     isDatabaseConnected,
     deleteHotel,
+    deleteAllHotels,
     updateHotel,
     confirmAction,
     setActiveTab
   } = useApp();
+
+  const uniqueHotels = useMemo(() => deduplicateHotels(hotels), [hotels]);
+  const uniqueJoiners = useMemo(() => deduplicateJoiners(joiners), [joiners]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZone, setSelectedZone] = useState('All Zones');
@@ -59,7 +64,7 @@ export const HotelsPage: React.FC = () => {
     status: 'Active' as 'Active' | 'Inactive'
   });
 
-  const filteredHotels = hotels.filter(h => {
+  const filteredHotels = uniqueHotels.filter(h => {
     const term = searchTerm.toLowerCase();
     const joinerStr = (h.joiner || h.assignedJoiner || '').toLowerCase();
     const ownerStr = (h.ownerName || h.contactPerson || '').toLowerCase();
@@ -84,9 +89,9 @@ export const HotelsPage: React.FC = () => {
   const paginatedHotels = filteredHotels.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage);
 
   const activeHotel: Hotel | null =
-    selectedHotel && hotels.some(h => String(h.id) === String(selectedHotel.id))
+    selectedHotel && uniqueHotels.some(h => String(h.id) === String(selectedHotel.id))
       ? selectedHotel
-      : filteredHotels[0] || hotels[0] || null;
+      : filteredHotels[0] || uniqueHotels[0] || null;
 
   const getHotelStats = (h: Hotel | null) => {
     if (!h) return { ordersCount: 0, totalSpent: 0, hotelOrders: [] as typeof orders };
@@ -116,11 +121,11 @@ export const HotelsPage: React.FC = () => {
 
   const activeHotelStats = getHotelStats(activeHotel);
 
-  const totalHotelsCount = hotels.length;
-  const activeHotelsCount = hotels.filter(h => (h.status || 'Active') === 'Active').length;
-  const inactiveHotelsCount = hotels.filter(h => h.status === 'Inactive').length;
+  const totalHotelsCount = uniqueHotels.length;
+  const activeHotelsCount = uniqueHotels.filter(h => (h.status || 'Active') === 'Active').length;
+  const inactiveHotelsCount = uniqueHotels.filter(h => h.status === 'Inactive').length;
   const zonesCount = zones.length;
-  const joinersCount = joiners.length;
+  const joinersCount = uniqueJoiners.length;
 
   const handleOpenEdit = (h: Hotel) => {
     setEditingHotel(h);
@@ -129,7 +134,7 @@ export const HotelsPage: React.FC = () => {
       ownerName: h.ownerName || '',
       mobile: h.mobile || '',
       zone: h.zone || (zones[0]?.name || 'Kharadi'),
-      joiner: h.joiner || (joiners[0]?.name || ''),
+      joiner: h.joiner || (uniqueJoiners[0]?.name || 'Direct Partner'),
       address: h.address || '',
       status: h.status === 'Active' ? 'Active' : 'Inactive'
     });
@@ -138,15 +143,33 @@ export const HotelsPage: React.FC = () => {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingHotel) return;
+
+    const newJoinerObj = uniqueJoiners.find(j => (j.name || '').toLowerCase() === (editForm.joiner || '').toLowerCase());
+    const newJoinerId = newJoinerObj ? String(newJoinerObj.id || (newJoinerObj as any).uid) : editForm.joiner;
+
     updateHotel(editingHotel.id, {
       name: editForm.name,
       ownerName: editForm.ownerName,
       mobile: editForm.mobile,
       zone: editForm.zone,
       joiner: editForm.joiner,
+      assignedJoiner: editForm.joiner,
+      assignedJoinerId: newJoinerId,
+      joinerId: newJoinerId,
+      joinedBy: newJoinerId,
       address: editForm.address,
       status: editForm.status
     });
+
+    if (editingHotel.joiner !== editForm.joiner || (editingHotel as any).assignedJoinerId !== newJoinerId) {
+      hotelService.reassignHotelOwnership(
+        String(editingHotel.id || editingHotel.hotelId),
+        { uid: newJoinerId, name: editForm.joiner },
+        'Super Admin',
+        'Admin reassigned hotel partner ownership via Admin Panel'
+      ).catch(err => console.warn('Ownership reassignment audit notice:', err));
+    }
+
     setEditingHotel(null);
   };
 
@@ -286,10 +309,31 @@ export const HotelsPage: React.FC = () => {
               className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 cursor-pointer shrink-0"
             >
               <option value="All Joiners">All Joiners</option>
-              {joiners.map(j => (
+              {uniqueJoiners.map(j => (
                 <option key={j.id} value={j.name}>{j.name}</option>
               ))}
             </select>
+
+            {uniqueHotels.length > 0 && (
+              <button
+                onClick={() => {
+                  confirmAction({
+                    title: 'Delete All Hotels',
+                    message: 'Are you sure you want to permanently delete all registered hotels? All hotel profiles, address records, and joiner assignments will be removed.',
+                    entityName: `${uniqueHotels.length} Hotels`,
+                    confirmLabel: 'Delete All',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteAllHotels();
+                    }
+                  });
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+                title="Delete all hotels permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete All
+              </button>
+            )}
 
             <button
               onClick={() => setIsAddHotelOpen(true)}
@@ -301,7 +345,7 @@ export const HotelsPage: React.FC = () => {
         </div>
 
         {/* Table Content */}
-        {hotels.length === 0 ? (
+        {uniqueHotels.length === 0 ? (
           <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
             <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
               <Building2 className="w-6 h-6" />
@@ -823,7 +867,7 @@ export const HotelsPage: React.FC = () => {
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium cursor-pointer"
                   >
                     <option value="Admin">Admin</option>
-                    {joiners.map(j => (
+                    {uniqueJoiners.map(j => (
                       <option key={j.id} value={j.name}>{j.name}</option>
                     ))}
                   </select>

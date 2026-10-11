@@ -76,20 +76,18 @@ export const WelcomeScreen: React.FC = () => {
         {/* Solid Green Login Button */}
         <button
           onClick={() => setCurrentScreen('LOGIN')}
-          className="w-full py-3.5 bg-[#15803D] hover:bg-[#166534] active:scale-[0.99] text-white font-black text-base rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
+          className="w-full py-4 bg-[#15803D] hover:bg-[#166534] active:scale-[0.99] text-white font-black text-base rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
         >
           <LogIn className="w-5 h-5" />
-          <span>Login</span>
+          <span>Login to Partner App</span>
         </button>
 
-        {/* White Register Button with Green Border */}
-        <button
-          onClick={() => setCurrentScreen('REGISTER')}
-          className="w-full py-3.5 bg-white hover:bg-emerald-50 active:scale-[0.99] border-2 border-[#15803D] text-[#15803D] font-black text-base rounded-2xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
-        >
-          <UserPlus className="w-5 h-5" />
-          <span>Register as Joiner</span>
-        </button>
+        {/* Security & Admin Onboarding Notice */}
+        <div className="text-center pt-1">
+          <p className="text-[11px] font-semibold text-slate-500">
+            🔒 Field Joiners are onboarded by Admin
+          </p>
+        </div>
       </div>
     </div>
   );

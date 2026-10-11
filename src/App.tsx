@@ -36,7 +36,8 @@ import { StandaloneMobileApp } from './mobileApp/StandaloneMobileApp';
 import { SplashScreen } from './components/SplashScreen';
 
 const MainContent: React.FC = () => {
-  const { activeTab, setActiveTab, toggleMobileMenu, confirmModal, closeConfirmModal } = useApp();
+  const { activeTab, setActiveTab, toggleMobileMenu, confirmModal, closeConfirmModal, adminProfile } = useApp();
+  const isSuperAdmin = !adminProfile?.role || adminProfile.role.toLowerCase().includes('super') || adminProfile.role.toLowerCase().includes('owner');
 
   const renderTab = () => {
     switch (activeTab) {
@@ -45,11 +46,11 @@ const MainContent: React.FC = () => {
       case 'Customer Mobile App':
       case 'Customer App':
       case 'Customer B2C App':
-        return <CustomerAppManagementPage />;
+        return isSuperAdmin ? <CustomerAppManagementPage /> : <Dashboard />;
       case 'Joiner Mobile App':
       case 'Joiner App Management':
       case 'Mobile App':
-        return <JoinerMobileAppManagementPage />;
+        return isSuperAdmin ? <JoinerMobileAppManagementPage /> : <Dashboard />;
       case 'Zones':
         return <ZonesPage />;
       case 'Joiners':
@@ -79,7 +80,7 @@ const MainContent: React.FC = () => {
       case 'Admin Management':
       case 'Sub-Admins':
       case 'Admin & Sub-Admins':
-        return <SettingsPage initialTab="User Management" />;
+        return isSuperAdmin ? <SettingsPage initialTab="User Management" /> : <Dashboard />;
       case 'Settings':
         return <SettingsPage initialTab="Backup & Security" />;
       case 'Profile':

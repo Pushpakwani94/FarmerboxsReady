@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "cap:build": "npm run build && npx cap sync android",
+    "cap:bundle": "npm run build && npx cap sync android && cd android && gradlew bundleRelease",
+    "build:aab": "powershell -ExecutionPolicy Bypass -File ./build_aab.ps1",
     "cap:sync": "npx cap sync android",
     "lint": "oxlint",
     "preview": "vite preview"

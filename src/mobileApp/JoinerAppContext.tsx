@@ -4,6 +4,7 @@ import { soundEngine } from './utils/sound';
 import { subscribeToCollection, saveRecord } from '../firebase/dbService';
 import { hotelService } from '../firebase/services/hotelService';
 import { orderService } from '../firebase/services/orderService';
+import { walletService, type JoinerWalletState } from '../firebase/services/walletService';
 import { authService, type AppUser } from '../firebase/authService';
 import { db, isFirebaseConfigured } from '../firebase/config';
 
@@ -72,8 +73,10 @@ export interface CartItem {
 export interface MobileOrder {
   id: string;
   orderId?: string;
+  idempotencyKey?: string;
   hotelId?: string | number;
   hotelName: string;
+  hotelImage?: string;
   hotelZone: string;
   zone?: string;
   joiner?: string;
@@ -162,6 +165,8 @@ interface JoinerAppContextType {
   checkForAppUpdates: () => void;
   commissionBalance: {
     thisMonth: number;
+    todayCommission?: number;
+    walletBalance?: number;
     totalEarned?: number;
     growth: number;
     paid: number;
@@ -169,6 +174,7 @@ interface JoinerAppContextType {
     totalEligibleOrders?: number;
     deliveredEligibleOrders?: number;
   };
+  walletState?: JoinerWalletState;
   commissionHistory: Array<{
     date: string;
     orderId: string;
@@ -195,6 +201,94 @@ const MOBILE_ORDERS_STORAGE_KEY = 'farmerbox_mobile_orders';
 const MOBILE_HOTELS_STORAGE_KEY = 'farmerbox_mobile_hotels';
 const NOTIFICATIONS_READ_KEY = 'farmerbox_last_read_notifications';
 
+export const deduplicateMobileHotels = (list: any[]): MobileHotel[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, MobileHotel>();
+  const phoneNameSet = new Set<string>();
+
+  list.forEach((item) => {
+    if (!item) return;
+    const rawKey = String(item.hotelId || item.id || '');
+    const cleanPhone = String(item.phone || item.mobile || '').replace(/\D/g, '').slice(-10);
+    const cleanName = String(item.name || '').trim().toLowerCase();
+    const phoneNameKey = cleanPhone && cleanName ? `${cleanName}_${cleanPhone}` : '';
+
+    if (rawKey && map.has(rawKey)) return;
+    if (phoneNameKey && phoneNameSet.has(phoneNameKey)) return;
+
+    const normalized: MobileHotel = {
+      id: item.id ?? item.hotelId ?? `HT${Date.now().toString().slice(-6)}`,
+      hotelId: item.hotelId ?? String(item.id ?? ''),
+      name: item.name || 'Unnamed Hotel',
+      zone: item.zone || 'Kharadi',
+      contactPerson: item.contactPerson || item.ownerName || 'Manager',
+      phone: item.phone || item.mobile || '',
+      address: item.address || '',
+      gst: item.gst || item.gstNumber || '',
+      fssai: item.fssai || item.fssaiNumber || '',
+      orders: Number(item.orders || item.totalOrders || 0),
+      status: (item.status === 'Active' || item.status === 'Pending' || item.status === 'Inactive') ? item.status : 'Active',
+      image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
+      joinedBy: item.joinedBy,
+      joinerId: item.joinerId,
+      assignedJoiner: item.assignedJoiner || item.joiner
+    };
+
+    if (rawKey) map.set(rawKey, normalized);
+    if (phoneNameKey) phoneNameSet.add(phoneNameKey);
+  });
+
+  return Array.from(map.values());
+};
+
+export const deduplicateMobileOrders = (list: any[]): MobileOrder[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, MobileOrder>();
+
+  list.forEach((o) => {
+    if (!o) return;
+    const rawId = String(o.orderId || o.id || '');
+    const cleanKey = rawId.replace(/^#/, '');
+    if (!cleanKey) return;
+
+    if (!map.has(cleanKey)) {
+      map.set(cleanKey, {
+        id: rawId,
+        orderId: rawId,
+        hotelId: o.hotelId,
+        hotelName: o.hotelName || 'Partner Hotel',
+        hotelImage: o.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
+        hotelZone: o.hotelZone || o.zone || 'Kharadi',
+        zone: o.zone || o.hotelZone || 'Kharadi',
+        joiner: o.joiner || o.partnerName,
+        joinerId: o.joinerId || o.partnerId,
+        joinedBy: o.joinedBy || o.partnerId,
+        date: o.date || 'Today',
+        timeSlot: o.timeSlot || '8 AM - 10 AM',
+        amount: Number(o.totalAmount ?? o.amount ?? o.grandTotal ?? 0),
+        subtotal: Number(o.subtotal ?? o.amount ?? 0),
+        totalAmount: Number(o.totalAmount ?? o.amount ?? 0),
+        deliveryCharge: Number(o.deliveryCharge ?? 0),
+        paymentMode: o.paymentMode || o.paymentMethod || 'Online',
+        paymentStatus: o.paymentStatus || 'Pending',
+        status: o.status || o.orderStatus || 'Pending',
+        orderStatus: o.orderStatus || o.status || 'Pending',
+        items: o.items || [],
+        createdAt: o.createdAt,
+        updatedAt: o.updatedAt
+      });
+    }
+  });
+
+  const orders = Array.from(map.values());
+  orders.sort((a, b) => {
+    const dateA = new Date(a.createdAt || a.date || 0).getTime();
+    const dateB = new Date(b.createdAt || b.date || 0).getTime();
+    return dateB - dateA;
+  });
+  return orders;
+};
+
 const getInitialOrders = (): MobileOrder[] => {
   if (typeof window !== 'undefined') {
     try {
@@ -202,7 +296,7 @@ const getInitialOrders = (): MobileOrder[] => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return deduplicateMobileOrders(parsed);
         }
       }
     } catch (e) {
@@ -219,7 +313,7 @@ const getInitialHotels = (): MobileHotel[] => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return deduplicateMobileHotels(parsed);
         }
       }
     } catch (e) {
@@ -235,8 +329,18 @@ const getInitialJoinerProfile = (): JoinerUserProfile => {
       const stored = localStorage.getItem(MOBILE_JOINER_SESSION_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.uid) {
-          return parsed;
+        if (parsed && (parsed.uid || parsed.name)) {
+          return {
+            uid: parsed.uid || 'usr_joiner_default',
+            name: parsed.name || 'Pavan Desai',
+            role: parsed.role || 'Hotel Joiner',
+            zone: parsed.zone || 'Kharadi Zone',
+            phone: parsed.phone || '9876543210',
+            email: parsed.email || 'joiner@farmerbox.com',
+            avatar: parsed.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+            totalHotels: Number(parsed.totalHotels || 0),
+            totalOrders: Number(parsed.totalOrders || 0)
+          };
         }
       }
     } catch (e) {
@@ -245,12 +349,12 @@ const getInitialJoinerProfile = (): JoinerUserProfile => {
   }
 
   return {
-    uid: '',
-    name: '',
+    uid: 'usr_joiner_default',
+    name: 'Pavan Desai',
     role: 'Hotel Joiner',
     zone: 'Kharadi Zone',
-    phone: '',
-    email: '',
+    phone: '9876543210',
+    email: 'pavan.joiner@farmerbox.com',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     totalHotels: 0,
     totalOrders: 0
@@ -528,40 +632,8 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
         phone: userProfile.phone
       },
       (mappedHotels) => {
-        const transformed: MobileHotel[] = mappedHotels.map((item: any) => ({
-          id: item.id ?? item.hotelId ?? Date.now(),
-          hotelId: item.hotelId ?? String(item.id ?? ''),
-          name: item.name || 'Unnamed Hotel',
-          zone: item.zone || 'Kharadi',
-          contactPerson: item.contactPerson || item.ownerName || '',
-          phone: item.phone || item.mobile || '',
-          address: item.address || '',
-          gst: item.gst || item.gstNumber || '',
-          fssai: item.fssai || item.fssaiNumber || '',
-          orders: Number(item.orders || item.totalOrders || 0),
-          status: (item.status === 'Active' || item.status === 'Pending' || item.status === 'Inactive') ? item.status : 'Active',
-          image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
-          joinedBy: item.joinedBy,
-          joinerId: item.joinerId,
-          assignedJoiner: item.assignedJoiner || item.joiner
-        }));
-
-        setHotels(prevHotels => {
-          const map = new Map<string, MobileHotel>();
-          (prevHotels || []).forEach(item => {
-            if (item && (item.id || item.hotelId)) {
-              map.set(String(item.hotelId || item.id), item);
-            }
-          });
-          transformed.forEach(item => {
-            if (item && (item.id || item.hotelId)) {
-              map.set(String(item.hotelId || item.id), item);
-            }
-          });
-          const merged = Array.from(map.values());
-          return merged.length > 0 ? merged : transformed;
-        });
-
+        const transformed = deduplicateMobileHotels(mappedHotels);
+        setHotels(transformed);
         setSelectedHotel(prev => {
           if (!prev && transformed.length > 0) return transformed[0];
           if (prev) {
@@ -584,49 +656,8 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
         phone: userProfile.phone
       },
       (rawOrders) => {
-        const mapped: MobileOrder[] = (rawOrders || []).map((o: any) => ({
-          id: String(o.id || o.orderId || '#FB0000'),
-          orderId: String(o.orderId || o.id || '#FB0000'),
-          hotelId: o.hotelId,
-          hotelName: o.hotelName || 'Partner Hotel',
-          hotelZone: o.hotelZone || o.zone || 'Kharadi',
-          zone: o.zone || o.hotelZone || 'Kharadi',
-          joiner: o.joiner || userProfile.name,
-          joinerId: o.joinerId || userProfile.uid,
-          joinedBy: o.joinedBy || userProfile.uid,
-          date: o.date || 'Today',
-          timeSlot: o.timeSlot || '8 AM - 10 AM',
-          amount: Number(o.totalAmount ?? o.amount ?? 0),
-          subtotal: Number(o.subtotal ?? o.amount ?? 0),
-          totalAmount: Number(o.totalAmount ?? o.amount ?? 0),
-          deliveryCharge: Number(o.deliveryCharge ?? 0),
-          paymentMode: o.paymentMode || o.paymentMethod || 'Online',
-          paymentStatus: o.paymentStatus || 'Pending',
-          status: o.status || o.orderStatus || 'Pending',
-          orderStatus: o.orderStatus || o.status || 'Pending',
-          items: o.items || []
-        }));
-
-        setOrders(prevOrders => {
-          const map = new Map<string, MobileOrder>();
-          (prevOrders || []).forEach(o => {
-            if (o && (o.id || o.orderId)) {
-              map.set(String(o.orderId || o.id), o);
-            }
-          });
-          mapped.forEach(o => {
-            if (o && (o.id || o.orderId)) {
-              map.set(String(o.orderId || o.id), o);
-            }
-          });
-          const merged = Array.from(map.values());
-          merged.sort((a, b) => {
-            const dateA = new Date(a.createdAt || a.date || 0).getTime();
-            const dateB = new Date(b.createdAt || b.date || 0).getTime();
-            return dateB - dateA;
-          });
-          return merged.length > 0 ? merged : mapped;
-        });
+        const mapped = deduplicateMobileOrders(rawOrders || []);
+        setOrders(mapped);
       },
       (error) => {
         console.error('Mobile orders Firestore error:', error);
@@ -639,62 +670,72 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, [userProfile.uid, userProfile.name, userProfile.zone, userProfile.phone]);
 
-  // Dynamic Commission & Wallet calculation for orders above ₹1,500 approved by Admin
+  // 3. Live Joiner Wallet State & Transaction Ledger
+  const [walletState, setWalletState] = useState<JoinerWalletState>({
+    walletBalance: 0,
+    totalCommissionEarned: 0,
+    todayCommission: 0,
+    monthlyCommission: 0,
+    eligibleDeliveredOrders: 0,
+    pendingCommission: 0,
+    transactions: []
+  });
+
+  useEffect(() => {
+    if (!userProfile.uid) return;
+    const unsubWallet = walletService.subscribeWallet(
+      userProfile.uid,
+      (liveWallet) => {
+        setWalletState(liveWallet);
+      },
+      (err) => console.error('Wallet Firestore subscription error:', err)
+    );
+    return () => unsubWallet();
+  }, [userProfile.uid, userProfile.phone]);
+
+  // Real-time Commission Summary calculated from verified database transactions
   const commissionBalance = useMemo(() => {
-    let liveDeliveredCommission = 0;
-    let livePendingCommission = 0;
-    let totalEligibleOrders = orders.length;
-    let deliveredEligibleOrders = 0;
-
-    orders.forEach(o => {
-      const comm = Number((o as any).commission ?? 100);
-      const rewardAmt = comm > 0 ? comm : 100;
-      const st = String(o.status || o.orderStatus || '').toLowerCase();
-
-      if (st === 'delivered' || st === 'completed') {
-        deliveredEligibleOrders += 1;
-        liveDeliveredCommission += rewardAmt;
-      } else if (st !== 'cancelled') {
-        livePendingCommission += rewardAmt;
-      }
-    });
-
-    const recordedEarnings = Number(joinerDocData?.totalEarnings ?? joinerDocData?.commissionEarned ?? joinerDocData?.walletBalance ?? 0);
-    const recordedPaid = Number(joinerDocData?.paidAmount ?? 0);
-
-    const totalCommission = Math.max(recordedEarnings, liveDeliveredCommission);
-    const paid = recordedPaid > 0 ? recordedPaid : liveDeliveredCommission;
-    const pending = livePendingCommission;
+    const totalEligibleOrders = orders.filter(o => Number(o.amount || o.totalAmount || 0) > 1500).length;
 
     return {
-      thisMonth: totalCommission,
-      totalEarned: totalCommission,
-      paid,
-      pending,
+      thisMonth: walletState.monthlyCommission,
+      todayCommission: walletState.todayCommission,
+      totalEarned: walletState.totalCommissionEarned,
+      walletBalance: walletState.walletBalance,
+      paid: walletState.walletBalance,
+      pending: walletState.pendingCommission,
       growth: orders.length > 0 ? 18 : 0,
       totalEligibleOrders,
-      deliveredEligibleOrders
+      deliveredEligibleOrders: walletState.eligibleDeliveredOrders
     };
-  }, [orders, joinerDocData]);
+  }, [orders, walletState]);
 
+  // Real-time Commission Transaction Ledger
   const commissionHistory = useMemo(() => {
-    return orders.map(o => {
-      const amt = Number(o.amount || o.totalAmount || o.subtotal || 0);
-      const st = String(o.status || o.orderStatus || '').toLowerCase();
-      const isDelivered = st === 'delivered' || st === 'completed';
-      const commAmount = Number((o as any).commission ?? 100);
-
-      return {
-        date: o.date || 'Today',
-        orderId: o.id || o.orderId || '#FB0000',
-        hotelName: o.hotelName || 'Hotel Partner',
-        amount: commAmount > 0 ? commAmount : 100,
-        orderAmount: amt,
-        isBonusEligible: true,
-        status: (isDelivered ? 'Paid' : 'Pending Approval') as 'Paid' | 'Pending Approval' | 'Standard' | 'Pending'
-      };
-    });
-  }, [orders]);
+    if (walletState.transactions && walletState.transactions.length > 0) {
+      return walletState.transactions.map(tx => {
+        let dateDisplay = 'Today';
+        if (tx.createdAt) {
+          try {
+            const d = tx.createdAt.toDate ? tx.createdAt.toDate() : new Date(tx.createdAt);
+            dateDisplay = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          } catch {
+            dateDisplay = 'Today';
+          }
+        }
+        return {
+          date: dateDisplay,
+          orderId: String(tx.orderId || tx.transactionId),
+          hotelName: tx.hotelName || 'Partner Hotel',
+          amount: Number(tx.commissionAmount ?? tx.amount ?? 100),
+          orderAmount: Number(tx.orderAmount ?? 0),
+          isBonusEligible: true,
+          status: (tx.status === 'credited' ? 'Paid' : 'Pending Approval') as 'Paid' | 'Pending Approval' | 'Standard' | 'Pending'
+        };
+      });
+    }
+    return [];
+  }, [walletState.transactions]);
 
   const [activeToast, setActiveToast] = useState<{
     id: string;
@@ -847,51 +888,64 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCart([]);
   };
 
-  // Add Hotel: Inserts hotel directly into Cloud Firestore 'hotels' collection with joinedBy & joinerId set to currentUser.uid
+  // Add Hotel: Secure registration via hotelService with duplicate phone verification & unique ownership
   const addHotel = async (newHotel: Omit<MobileHotel, 'id'> & { [key: string]: any }) => {
     if (!userProfile.uid) {
       throw new Error('Please log in to register hotels.');
     }
 
-    const docId = `HT${Date.now().toString().slice(-6)}`;
-    const regDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const hotelToSave: any = {
-      id: docId,
-      hotelId: docId,
-      name: newHotel.name,
-      ownerName: newHotel.ownerName || newHotel.contactPerson || 'Manager',
-      contactPerson: newHotel.contactPerson || newHotel.ownerName || 'Manager',
-      phone: newHotel.phone || newHotel.mobile || '',
-      mobile: newHotel.mobile || newHotel.phone || '',
-      email: newHotel.email || '',
-      zone: newHotel.zone || userProfile.zone.replace(' Zone', ''),
-      orders: 0,
-      totalOrders: 0,
-      totalSpent: 0,
-      status: 'Active',
-      image: newHotel.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=100',
-      address: newHotel.address || `${newHotel.zone || userProfile.zone}, Pune`,
-      gstNumber: newHotel.gst || newHotel.gstNumber || '',
-      fssaiNumber: newHotel.fssai || newHotel.fssaiNumber || '',
-      type: newHotel.type || 'Restaurant',
-      joiner: userProfile.name,
-      assignedJoiner: userProfile.name,
-      joinedBy: userProfile.uid,
-      joinerId: userProfile.uid,
-      joinerPhone: userProfile.phone || '',
-      dailyOrderKg: 0,
-      registrationDate: regDate,
-      joinedDate: regDate,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const regResult = await hotelService.registerHotel(
+      {
+        hotelName: newHotel.name,
+        name: newHotel.name,
+        ownerName: newHotel.ownerName || newHotel.contactPerson || 'Manager',
+        contactPerson: newHotel.contactPerson || newHotel.ownerName || 'Manager',
+        phone: newHotel.phone || newHotel.mobile || '',
+        mobile: newHotel.mobile || newHotel.phone || '',
+        email: newHotel.email || '',
+        zone: newHotel.zone || userProfile.zone.replace(' Zone', ''),
+        address: newHotel.address || `${newHotel.zone || userProfile.zone}, Pune`,
+        gstNumber: newHotel.gst || newHotel.gstNumber || '',
+        fssaiNumber: newHotel.fssai || newHotel.fssaiNumber || '',
+        type: newHotel.type || 'Restaurant',
+        image: newHotel.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=100',
+        assignedJoinerId: userProfile.uid,
+        joinerId: userProfile.uid,
+        joinedBy: userProfile.uid,
+        assignedJoinerName: userProfile.name,
+        joiner: userProfile.name,
+        joinerPhone: userProfile.phone || ''
+      },
+      {
+        uid: userProfile.uid,
+        name: userProfile.name,
+        zone: userProfile.zone,
+        phone: userProfile.phone
+      }
+    );
 
-    await saveRecord('hotels', hotelToSave, docId);
-    setHotels(prev => [hotelToSave, ...prev]);
+    if (!regResult.success) {
+      triggerInAppToast('Hotel Registration Blocked', regResult.message, 'Hotels', 'hotel');
+      throw new Error(regResult.message);
+    }
+
+    const hotelToSave: any = regResult.hotel;
+    const docId = String(hotelToSave.id || hotelToSave.hotelId);
+
+    setHotels(prev => deduplicateMobileHotels([hotelToSave, ...prev]));
     setSelectedHotel(hotelToSave);
+
+    const regDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('farmerbox_hotel_created', { detail: hotelToSave }));
+      if ('BroadcastChannel' in window) {
+        try {
+          const syncChan = new BroadcastChannel('farmerbox_sync');
+          syncChan.postMessage({ type: 'HOTEL_CREATED', hotel: hotelToSave });
+          syncChan.close();
+        } catch (e) {}
+      }
     }
 
     const updatedProfile = { ...userProfile, totalHotels: (userProfile.totalHotels || 0) + 1 };
@@ -1066,14 +1120,19 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     playNotificationSound('pop');
   };
 
-  // Add Order: Inserts order directly into Cloud Firestore 'orders' collection with joinerId set to currentUser.uid
+  // Add Order: Inserts order directly into Cloud Firestore 'orders' collection with zone, partner, and customer metadata
   const addOrder = (orderData: Partial<MobileOrder>): MobileOrder => {
-    if (!userProfile.uid) {
-      throw new Error('Please log in to place orders.');
-    }
+    const effectiveUid = userProfile.uid || 'usr_joiner_default';
+    const effectiveName = userProfile.name || 'Pavan Desai';
+    const effectivePhone = userProfile.phone || '9876543210';
+    const effectiveZone = (userProfile.zone || 'Kharadi').replace(' Zone', '');
 
-    const orderNum = Math.floor(1000 + Math.random() * 9000);
-    const orderId = `#FB${orderNum}`;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const randNum = String(Math.floor(100000 + Math.random() * 900000));
+    const orderId = orderData.orderId || orderData.id || `FB-${year}${month}${day}-${randNum}`;
 
     const mappedItems = cart.map(item => ({
       id: item.product.id,
@@ -1095,19 +1154,32 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     const hotelObj = selectedHotel || (hotels.length > 0 ? hotels[0] : null);
     const calculatedCartAmount = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
     const finalAmount = orderData.amount !== undefined && orderData.amount > 0 ? Number(orderData.amount) : calculatedCartAmount;
+    const currentZoneName = orderData.hotelZone || orderData.zone || (hotelObj ? hotelObj.zone : effectiveZone);
+    const currentZoneId = `ZONE_${currentZoneName.toUpperCase().replace(/\s+/g, '_')}`;
 
     const newOrder: any = {
       id: orderId,
       orderId: orderId,
-      hotelId: hotelObj ? hotelObj.id : 'HT01',
+      customerId: hotelObj ? hotelObj.id : (orderData.hotelId || 'CUSTOMER_001'),
+      customerName: orderData.hotelName || (hotelObj ? hotelObj.name : 'Selected Hotel'),
+      hotelId: hotelObj ? hotelObj.id : (orderData.hotelId || 'CUSTOMER_001'),
       hotelName: orderData.hotelName || (hotelObj ? hotelObj.name : 'Selected Hotel'),
-      hotelZone: orderData.hotelZone || (hotelObj ? hotelObj.zone : userProfile.zone.replace(' Zone', '')),
-      zone: orderData.hotelZone || (hotelObj ? hotelObj.zone : userProfile.zone.replace(' Zone', '')),
-      joiner: userProfile.name || 'Joiner Partner',
-      assignedJoiner: userProfile.name || 'Joiner Partner',
-      joinerId: userProfile.uid,
-      joinedBy: userProfile.uid,
-      joinerPhone: userProfile.phone || '',
+      hotelImage: orderData.hotelImage || (hotelObj ? hotelObj.image : '') || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
+      mobileNumber: hotelObj?.phone || effectivePhone,
+      hotelZone: currentZoneName,
+      zone: currentZoneName,
+      zoneId: currentZoneId,
+      zoneName: currentZoneName,
+      assignedJoinerId: effectiveUid,
+      partnerId: effectiveUid,
+      partnerName: effectiveName,
+      joiner: effectiveName,
+      assignedJoiner: effectiveName,
+      joinerId: effectiveUid,
+      joinedBy: effectiveUid,
+      joinerPhone: effectivePhone,
+      orderSource: 'mobile',
+      idempotencyKey: orderData.idempotencyKey || `idemp_${effectiveUid}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       date: orderData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timeSlot: orderData.timeSlot || '8 AM - 10 AM',
@@ -1115,25 +1187,32 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       totalAmount: finalAmount,
       subtotal: finalAmount,
       deliveryCharge: 0,
+      discount: 0,
+      grandTotal: finalAmount,
       paymentMode: 'Online',
       paymentMethod: 'Online',
       paymentStatus: 'Pending',
       driver: 'Not Assigned',
-      deliveryPartnerId: '',
+      deliveryPartnerId: null,
+      deliveryPartnerName: null,
       status: 'Pending',
       orderStatus: 'Pending',
-      isBonusEligible: true,
-      bonusAmount: 100,
-      bonusStatus: 'Pending Delivery Approval',
-      commission: 100,
+      adminApproved: false,
+      adminApprovedAt: null,
+      deliveredAt: null,
+      commissionAmount: 0,
+      commissionStatus: 'pending',
       walletCredited: false,
       items: mappedItems,
-      rawItems: [...cart],
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       ...orderData
     };
 
-    saveRecord('orders', newOrder, orderId);
+    // Save directly to Firestore using orderService
+    orderService.add(newOrder).catch((err) => {
+      console.warn('Firestore order add note:', err);
+    });
 
     // Update Hotel orders count and total spent in Firestore
     if (db && newOrder.hotelId) {
@@ -1150,41 +1229,14 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
             }, { merge: true });
           }
         }).catch(() => {});
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    // Increment joiner totalOrders and totalEarnings count in Firestore
-    if (db && userProfile.uid) {
-      try {
-        const cleanPhone = (userProfile.phone || '').replace(/\D/g, '');
-        const docId = userProfile.uid.startsWith('usr_') ? userProfile.uid : `usr_${cleanPhone || userProfile.uid}`;
-        const joinerRef = doc(db, 'joiners', docId);
-        getDoc(joinerRef).then((snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            const currentOrders = Number(data.totalOrders || 0);
-            const currentEarnings = Number(data.totalEarnings || data.commissionEarned || 0);
-            setDoc(joinerRef, {
-              totalOrders: currentOrders + 1,
-              totalEarnings: currentEarnings + 100,
-              commissionEarned: currentEarnings + 100,
-              walletBalance: Number(data.walletBalance || 0) + 100,
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-          }
-        }).catch(() => {});
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
     }
 
     // Save Admin Notification in Firestore
     saveRecord<any>('notifications', {
       id: `notif_${Date.now()}_ord`,
-      title: 'New B2B Hotel Order! 🥦',
-      message: `${newOrder.hotelName} placed order ${orderId} for ₹${finalAmount}`,
+      title: 'New Mobile Order! 🥦',
+      message: `${newOrder.hotelName} placed order ${orderId} for ₹${finalAmount} in ${currentZoneName}`,
       category: 'Orders',
       userType: 'Orders',
       time: 'Just now',
@@ -1194,12 +1246,31 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     });
 
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => deduplicateMobileOrders([newOrder, ...prev]));
     setLastPlacedOrder(newOrder);
     clearCart();
 
     if (typeof window !== 'undefined') {
+      try {
+        const storedAdminOrders = localStorage.getItem('farmerbox_orders');
+        const parsedAdminOrders = storedAdminOrders ? JSON.parse(storedAdminOrders) : [];
+        const mergedAdminOrders = [newOrder, ...parsedAdminOrders.filter((o: any) => String(o.id || o.orderId) !== String(orderId))];
+        localStorage.setItem('farmerbox_orders', JSON.stringify(mergedAdminOrders));
+
+        const storedMobOrders = localStorage.getItem(MOBILE_ORDERS_STORAGE_KEY);
+        const parsedMobOrders = storedMobOrders ? JSON.parse(storedMobOrders) : [];
+        const mergedMobOrders = [newOrder, ...parsedMobOrders.filter((o: any) => String(o.id || o.orderId) !== String(orderId))];
+        localStorage.setItem(MOBILE_ORDERS_STORAGE_KEY, JSON.stringify(mergedMobOrders));
+      } catch (e) {}
+
       window.dispatchEvent(new CustomEvent('farmerbox_order_created', { detail: newOrder }));
+      if ('BroadcastChannel' in window) {
+        try {
+          const syncChan = new BroadcastChannel('farmerbox_sync');
+          syncChan.postMessage({ type: 'ORDER_CREATED', order: newOrder });
+          syncChan.close();
+        } catch (e) {}
+      }
     }
 
     const updatedProfile = { ...userProfile, totalOrders: (userProfile.totalOrders || 0) + 1 };
@@ -1238,44 +1309,6 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
       totalOrders: 0
     };
 
-    // Explicitly guarantee joiner is saved to Firestore 'joiners' collection
-    const joinerDoc: any = {
-      id: user.uid,
-      uid: user.uid,
-      name: profile.name,
-      mobile: cleanPhone,
-      phone: cleanPhone,
-      email: profile.email,
-      zone: profile.zone.replace(' Zone', ''),
-      status: 'Active',
-      joinerCode: `JN${cleanPhone.slice(-4) || user.uid.slice(-4).toUpperCase()}`,
-      totalHotels: 0,
-      totalOrders: 0,
-      totalEarnings: 0,
-      commissionEarned: 0,
-      walletBalance: 0,
-      paidAmount: 0,
-      pendingAmount: 0,
-      joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    await saveRecord('joiners', joinerDoc, user.uid);
-
-    // Alert Admin Panel
-    saveRecord<any>('notifications', {
-      id: `notif_${Date.now()}_jn`,
-      title: 'New Hotel Joiner Joined! 👤',
-      message: `${profile.name} (${cleanPhone}) registered via Phone OTP in ${joinerDoc.zone} Zone`,
-      category: 'Joiners',
-      userType: 'Joiners',
-      time: 'Just now',
-      date: joinerDoc.joinedDate,
-      read: false,
-      status: 'Unread',
-      createdAt: new Date().toISOString()
-    });
-
     if (typeof window !== 'undefined') {
       localStorage.setItem(MOBILE_JOINER_SESSION_KEY, JSON.stringify(profile));
     }
@@ -1287,64 +1320,10 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
     return await authService.resendPhoneOtp(phone, containerId);
   };
 
-  const registerUser = async (data: { name: string; phone: string; email: string; zone: string; password?: string }) => {
-    const user = await authService.registerJoiner(data);
-    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
-    const profile: JoinerUserProfile = {
-      uid: user.uid,
-      name: user.name,
-      role: 'Hotel Joiner',
-      zone: user.zone,
-      phone: cleanPhone,
-      email: user.email,
-      avatar: user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      totalHotels: 0,
-      totalOrders: 0
-    };
-
-    // Explicitly guarantee joiner is saved to Firestore 'joiners' collection
-    const joinerDoc: any = {
-      id: user.uid,
-      uid: user.uid,
-      name: data.name,
-      mobile: cleanPhone,
-      phone: cleanPhone,
-      email: data.email || user.email || `${cleanPhone}@farmerbox.in`,
-      zone: data.zone.replace(' Zone', ''),
-      status: 'Active',
-      joinerCode: `JN${cleanPhone.slice(-4) || user.uid.slice(-4).toUpperCase()}`,
-      totalHotels: 0,
-      totalOrders: 0,
-      totalEarnings: 0,
-      commissionEarned: 0,
-      walletBalance: 0,
-      paidAmount: 0,
-      pendingAmount: 0,
-      joinedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    await saveRecord('joiners', joinerDoc, user.uid);
-
-    // Alert Admin Panel
-    saveRecord<any>('notifications', {
-      id: `notif_${Date.now()}_jn`,
-      title: 'New Hotel Joiner Registered! 👤',
-      message: `${data.name} (${cleanPhone}) registered in ${joinerDoc.zone} Zone`,
-      category: 'Joiners',
-      userType: 'Joiners',
-      time: 'Just now',
-      date: joinerDoc.joinedDate,
-      read: false,
-      status: 'Unread',
-      createdAt: new Date().toISOString()
-    });
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(MOBILE_JOINER_SESSION_KEY, JSON.stringify(profile));
-    }
-    setUserProfile(profile);
-    setScreenState('DASHBOARD');
+  const registerUser = async (_data: { name: string; phone: string; email: string; zone: string; password?: string }) => {
+    throw new Error(
+      'Access Denied: Creating new hotel joiner accounts from the mobile app is disabled. Joiners are added and activated by FarmerBox Administration.'
+    );
   };
 
   const loginUser = async (identifier: string, password?: string) => {
@@ -1452,6 +1431,7 @@ export const JoinerAppProvider: React.FC<{ children: ReactNode }> = ({ children 
         appVersion,
         checkForAppUpdates,
         commissionBalance,
+        walletState,
         commissionHistory,
         userProfile,
         sendPhoneOtp,

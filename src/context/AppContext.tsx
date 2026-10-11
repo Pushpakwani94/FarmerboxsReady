@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import type {
   Order,
@@ -8,6 +8,7 @@ import type {
   Hotel,
   Product,
   PaymentTransaction,
+  WalletTransaction,
   NotificationItem,
   OrderStatus
 } from '../types';
@@ -20,7 +21,10 @@ import {
 } from '../firebase/dbService';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { authService } from '../firebase/authService';
+import { orderService } from '../firebase/services/orderService';
+import { hotelService } from '../firebase/services/hotelService';
 import { resolveProductImage } from '../utils/productImages';
+import { soundEngine } from '../mobileApp/utils/sound';
 
 export interface AdminProfile {
   name: string;
@@ -46,10 +50,20 @@ interface AppContextType {
   hotels: Hotel[];
   products: Product[];
   payments: PaymentTransaction[];
+  walletTransactions: WalletTransaction[];
   notifications: NotificationItem[];
   isDatabaseConnected: boolean;
   firestoreError: string | null;
   seedDatabaseToFirebase: () => Promise<any>;
+
+  // Real-time New Order Alert Popup
+  newOrderAlert: { order: Order; visible: boolean } | null;
+  dismissNewOrderAlert: () => void;
+  simulateMultiMobileOrders: (devicesCount?: number) => Promise<string[]>;
+
+  // Delivery Verification & Partner Commission
+  approveDelivery: (orderId: string) => Promise<{ success: boolean; message: string }>;
+  rejectDelivery: (orderId: string, reason?: string) => Promise<void>;
 
   // Navigation
   activeTab: string;
@@ -133,9 +147,10 @@ interface AppContextType {
   addZone: (name: string, area?: string, status?: 'Active' | 'Inactive') => void;
   updateZone: (zoneId: number | string, data: Partial<Zone>) => void;
   deleteZone: (zoneId: number | string) => void;
-  addJoiner: (name: string, mobile: string, zone: string, email?: string, status?: 'Active' | 'Inactive') => void;
+  addJoiner: (name: string, mobile: string, zone: string, email?: string, status?: 'Active' | 'Inactive', password?: string) => void;
   updateJoiner: (joinerId: number | string, data: Partial<Joiner>) => void;
   deleteJoiner: (joinerId: number | string) => void;
+  deleteAllJoiners: () => void;
   addHotel: (
     nameOrData: string | { name: string; contactPerson?: string; ownerName?: string; phone?: string; mobile?: string; zone: string; joiner: string; address?: string; status?: 'Active' | 'Inactive' },
     owner?: string,
@@ -145,9 +160,11 @@ interface AppContextType {
   ) => void;
   updateHotel: (hotelId: number | string, data: Partial<Hotel>) => void;
   deleteHotel: (hotelId: number | string) => void;
+  deleteAllHotels: () => void;
   addDriver: (driver: Partial<Driver>) => void;
   updateDriver: (driverId: number | string, data: Partial<Driver>) => void;
   deleteDriver: (driverId: number | string) => void;
+  deleteAllDrivers: () => void;
   addProduct: (product: Partial<Product>) => void;
   updateProduct: (productId: number | string, data: Partial<Product>) => void;
   deleteProduct: (productId: number | string) => void;
@@ -175,10 +192,13 @@ import { initialProductsList } from '../data/productsData';
 
 // One-time purge of legacy mock data from browser storage
 if (typeof window !== 'undefined') {
-  const CLEAN_MOCK_VERSION = 'farmerbox_cleaned_dummy_data_v3';
+  const CLEAN_MOCK_VERSION = 'farmerbox_cleaned_dummy_joiners_v2';
   if (localStorage.getItem(CLEAN_MOCK_VERSION) !== 'true') {
-    const keysToPurge = ['orders', 'hotels'];
-    keysToPurge.forEach((k) => localStorage.removeItem(`farmerbox_${k}`));
+    const keysToPurge = ['joiners', 'farmerbox_joiners', 'orders', 'hotels', 'drivers', 'zones', 'products'];
+    keysToPurge.forEach((k) => {
+      localStorage.removeItem(`farmerbox_${k}`);
+      localStorage.removeItem(k);
+    });
     localStorage.setItem(CLEAN_MOCK_VERSION, 'true');
   }
 }
@@ -188,9 +208,19 @@ const getStoredOrFallback = <T,>(key: string, fallback: T[]): T[] => {
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = localStorage.getItem(`farmerbox_${key}`);
-    if (raw) {
+    if (raw !== null && raw !== undefined) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
+        if (key === 'joiners') {
+          return parsed.filter((j: any) => {
+            const ph = String(j.mobile || j.phone || '').replace(/\D/g, '');
+            const id = String(j.id || j.uid || '');
+            const name = String(j.name || '').toLowerCase();
+            return ph !== '9822011111' && ph !== '9822022222' && ph !== '9822033333' &&
+                   id !== 'usr_9822011111' && id !== 'usr_9822022222' && id !== 'usr_9822033333' &&
+                   name !== 'rahul patil' && name !== 'amit shinde' && name !== 'vikas jadhav';
+          }) as unknown as T[];
+        }
         return parsed;
       }
     }
@@ -210,19 +240,344 @@ const saveToLocal = (key: string, data: any) => {
   }
 };
 
+// Dedicated Helper to Deduplicate and Normalize Hotels
+export const deduplicateHotels = (list: any[]): Hotel[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, any>();
+  const phoneNameSet = new Set<string>();
+
+  // Load deleted hotels blacklist from localStorage
+  let deletedSet = new Set<string>();
+  if (typeof window !== 'undefined') {
+    try {
+      const delRaw = localStorage.getItem('farmerbox_deleted_hotel_ids');
+      if (delRaw) {
+        const parsed: string[] = JSON.parse(delRaw);
+        deletedSet = new Set(parsed.map(x => String(x).toLowerCase().trim()));
+      }
+    } catch {}
+  }
+
+  list.forEach((item, idx) => {
+    if (!item) return;
+    const rawKey = String(item.hotelId || item.id || '').trim();
+    const cleanPhone = String(item.mobile || item.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanName = String(item.name || item.hotelName || '').trim().toLowerCase();
+    const phoneNameKey = cleanPhone && cleanName ? `${cleanName}_${cleanPhone}` : '';
+
+    // Permanently filter out any deleted hotel
+    if (
+      (rawKey && deletedSet.has(rawKey.toLowerCase())) ||
+      (cleanPhone && deletedSet.has(cleanPhone)) ||
+      (phoneNameKey && deletedSet.has(phoneNameKey)) ||
+      (cleanName && deletedSet.has(cleanName))
+    ) {
+      return;
+    }
+
+    if (rawKey && map.has(rawKey)) return;
+    if (phoneNameKey && phoneNameSet.has(phoneNameKey)) return;
+
+    if (rawKey) map.set(rawKey, item);
+    if (phoneNameKey) phoneNameSet.add(phoneNameKey);
+  });
+
+  return Array.from(map.values()).map((item: any, idx: number) => {
+    const idVal = item.id || item.hotelId || `HT${Date.now().toString().slice(-6)}_${idx}`;
+    return {
+      ...item,
+      id: idVal,
+      hotelId: item.hotelId || String(idVal),
+      name: item.name || 'Unnamed Hotel',
+      ownerName: item.ownerName || item.contactPerson || 'Manager',
+      contactPerson: item.contactPerson || item.ownerName || 'Manager',
+      mobile: item.mobile || item.phone || '',
+      phone: item.phone || item.mobile || '',
+      email: item.email || '',
+      zone: (item.zone || 'Kharadi').replace(' Zone', ''),
+      joiner: item.joiner || item.assignedJoiner || 'Direct Partner',
+      assignedJoiner: item.assignedJoiner || item.joiner || 'Direct Partner',
+      joinedBy: item.joinedBy || item.joinerId || '',
+      joinerId: item.joinerId || item.joinedBy || '',
+      address: item.address || `${(item.zone || 'Kharadi').replace(' Zone', '')}, Pune`,
+      totalOrders: Number(item.totalOrders ?? item.orders ?? 0),
+      orders: Number(item.orders ?? item.totalOrders ?? 0),
+      dailyOrderKg: Number(item.dailyOrderKg ?? 0),
+      type: item.type || 'Restaurant',
+      totalSpent: Number(item.totalSpent ?? 0),
+      registrationDate: item.registrationDate || item.joinedDate || 'Just now',
+      gstNumber: item.gstNumber || item.gst || '',
+      fssaiNumber: item.fssaiNumber || item.fssai || '',
+      rating: Number(item.rating || 4.8),
+      status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+      image: item.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'
+    };
+  });
+};
+
+// Dedicated Helper to Deduplicate and Normalize Orders
+export const deduplicateOrders = (list: any[]): Order[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, any>();
+
+  list.forEach((item, idx) => {
+    if (!item) return;
+    const rawId = String(item.orderId || item.id || '');
+    const cleanKey = rawId.replace(/^#/, '');
+    if (!cleanKey) return;
+
+    if (!map.has(cleanKey) && !map.has(rawId)) {
+      map.set(cleanKey, item);
+    }
+  });
+
+  const normalized = Array.from(map.values()).map((o, idx) => orderService.normalizeOrder(o, o.id || `ORD_${idx}`));
+  normalized.sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.date || 0).getTime();
+    const timeB = new Date(b.createdAt || b.date || 0).getTime();
+    return timeB - timeA;
+  });
+  return normalized;
+};
+
+// Helper to load real initial orders from all mobile and admin sources
+const getInitialOrdersState = (): Order[] => {
+  if (typeof window === 'undefined') return [];
+  const list: any[] = [];
+
+  try {
+    const mobRaw = localStorage.getItem('farmerbox_mobile_orders');
+    if (mobRaw) {
+      const parsed = JSON.parse(mobRaw);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+
+  try {
+    const custRaw = localStorage.getItem('farmerbox_customer_orders');
+    if (custRaw) {
+      const parsed = JSON.parse(custRaw);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+
+  try {
+    const adminRaw = localStorage.getItem('farmerbox_orders');
+    if (adminRaw) {
+      const parsed = JSON.parse(adminRaw);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+
+  return deduplicateOrders(list);
+};
+
+// Helper to load real initial hotels from mobile joiner app and admin
+const getInitialHotelsState = (): Hotel[] => {
+  if (typeof window === 'undefined') return [];
+  const list: any[] = [];
+
+  try {
+    const mobRaw = localStorage.getItem('farmerbox_mobile_hotels');
+    if (mobRaw) {
+      const parsed = JSON.parse(mobRaw);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+
+  try {
+    const adminRaw = localStorage.getItem('farmerbox_hotels');
+    if (adminRaw) {
+      const parsed = JSON.parse(adminRaw);
+      if (Array.isArray(parsed)) list.push(...parsed);
+    }
+  } catch {}
+
+  return deduplicateHotels(list);
+};
+
+// Dedicated Helper to Deduplicate and Normalize Joiners
+export const deduplicateJoiners = (list: any[]): Joiner[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, any>();
+  const phoneSet = new Set<string>();
+  const nameSet = new Set<string>();
+
+  list.forEach((item, idx) => {
+    if (!item) return;
+    const cleanPhone = String(item.mobile || item.phone || item.phoneNumber || '').replace(/\D/g, '').slice(-10);
+    const cleanName = String(item.name || '').trim().toLowerCase();
+    const rawKey = String(item.id || item.uid || '');
+
+    // Strictly skip dummy seed joiners from database/storage
+    if (
+      cleanPhone === '9822011111' || cleanPhone === '9822022222' || cleanPhone === '9822033333' ||
+      rawKey === 'usr_9822011111' || rawKey === 'usr_9822022222' || rawKey === 'usr_9822033333' ||
+      cleanName === 'rahul patil' || cleanName === 'amit shinde' || cleanName === 'vikas jadhav'
+    ) {
+      return;
+    }
+
+    // Check against deleted joiners blacklist in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedRaw = localStorage.getItem('farmerbox_deleted_joiner_ids');
+        if (deletedRaw) {
+          const deletedArr: string[] = JSON.parse(deletedRaw);
+          if (
+            (cleanPhone && deletedArr.includes(cleanPhone)) ||
+            (rawKey && deletedArr.includes(rawKey)) ||
+            (cleanPhone && deletedArr.includes(`usr_${cleanPhone}`))
+          ) {
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // Check if phone or exact non-generic name is already registered
+    if (cleanPhone && phoneSet.has(cleanPhone)) return;
+    if (cleanName && cleanName !== 'joiner partner' && cleanName !== 'unnamed joiner' && nameSet.has(cleanName)) return;
+
+    const primaryKey = cleanPhone ? `usr_${cleanPhone}` : (rawKey || `usr_${idx + 1}`);
+
+    if (map.has(primaryKey)) return;
+
+    map.set(primaryKey, item);
+    if (cleanPhone) phoneSet.add(cleanPhone);
+    if (cleanName && cleanName !== 'joiner partner' && cleanName !== 'unnamed joiner') nameSet.add(cleanName);
+  });
+
+  return Array.from(map.values()).map((item: any, idx: number) => {
+    const cleanPhone = String(item.mobile || item.phone || item.phoneNumber || '').replace(/\D/g, '').slice(-10);
+    const primaryId = item.uid || item.id || (cleanPhone ? `usr_${cleanPhone}` : `usr_${idx + 1}`);
+    const cleanName = item.name || (cleanPhone ? `Joiner ${cleanPhone.slice(-4)}` : 'Joiner Partner');
+
+    return {
+      ...item,
+      id: primaryId,
+      uid: item.uid || primaryId,
+      name: cleanName,
+      mobile: cleanPhone || item.mobile || item.phone || '',
+      phone: cleanPhone || item.phone || item.mobile || '',
+      email: item.email || `${cleanName.toLowerCase().replace(/\s+/g, '')}@farmerbox.in`,
+      zone: (item.zone || 'Kharadi').replace(' Zone', ''),
+      joinerCode: item.joinerCode || `JN${cleanPhone.slice(-4) || (1001 + idx)}`,
+      status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+      totalHotels: Number(item.totalHotels || item.hotelsCount || 0),
+      totalOrders: Number(item.totalOrders || item.ordersCount || 0),
+      totalEarnings: Number(item.totalEarnings || item.commissionEarned || (item.walletBalance || 0)),
+      commissionEarned: Number(item.commissionEarned || item.totalEarnings || (item.walletBalance || 0)),
+      walletBalance: Number(item.walletBalance ?? item.totalEarnings ?? 0),
+      paidAmount: Number(item.paidAmount ?? 0),
+      pendingAmount: Number(item.pendingAmount ?? item.walletBalance ?? 0),
+      avatar: item.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+      upiId: item.upiId || `${cleanName.toLowerCase().replace(/\s+/g, '')}@okaxis`,
+      bankName: item.bankName || 'HDFC Bank',
+      accountNo: item.accountNo || '•••• •••• 4521',
+      ifscCode: item.ifscCode || 'HDFC0001234'
+    };
+  });
+};
+
+// Dedicated Helper to Deduplicate and Normalize Delivery Drivers
+export const deduplicateDrivers = (list: any[]): Driver[] => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, any>();
+  const phoneSet = new Set<string>();
+
+  // Load deleted drivers blacklist from localStorage
+  let deletedSet = new Set<string>();
+  if (typeof window !== 'undefined') {
+    try {
+      const delRaw = localStorage.getItem('farmerbox_deleted_driver_ids');
+      if (delRaw) {
+        const parsed: string[] = JSON.parse(delRaw);
+        deletedSet = new Set(parsed.map(x => String(x).toLowerCase().trim()));
+      }
+    } catch {}
+  }
+
+  list.forEach((item, idx) => {
+    if (!item) return;
+    const cleanPhone = String(item.mobile || item.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanName = String(item.name || '').trim().toLowerCase();
+    const rawKey = String(item.id || '').trim();
+    const vehicleNo = String(item.vehicleNo || item.vehicleNumber || '').trim().toUpperCase();
+
+    // Strictly skip dummy seed drivers
+    if (
+      cleanPhone === '9876543210' || cleanPhone === '9876543211' || cleanPhone === '9876543212' ||
+      rawKey === '1' || rawKey === '2' || rawKey === '3' ||
+      cleanName === 'suresh jadhav' || cleanName === 'ramesh pawar' || cleanName === 'santosh shinde' ||
+      vehicleNo === 'MH-12-FB-1001' || vehicleNo === 'MH-12-FB-1002' || vehicleNo === 'MH-12-FB-1003'
+    ) {
+      return;
+    }
+
+    // Check against deleted drivers blacklist
+    if (
+      (rawKey && deletedSet.has(rawKey.toLowerCase())) ||
+      (cleanPhone && deletedSet.has(cleanPhone)) ||
+      (cleanName && deletedSet.has(cleanName)) ||
+      (vehicleNo && deletedSet.has(vehicleNo.toLowerCase()))
+    ) {
+      return;
+    }
+
+    if (cleanPhone && phoneSet.has(cleanPhone)) return;
+
+    const primaryKey = cleanPhone ? `drv_${cleanPhone}` : (rawKey || `drv_${idx + 1}`);
+    if (map.has(primaryKey)) return;
+
+    map.set(primaryKey, item);
+    if (cleanPhone) phoneSet.add(cleanPhone);
+  });
+
+  return Array.from(map.values()).map((item: any, idx: number) => {
+    const cleanPhone = String(item.mobile || item.phone || '').replace(/\D/g, '').slice(-10);
+    const idVal = item.id || (cleanPhone ? `DRV_${cleanPhone}` : idx + 1);
+
+    return {
+      ...item,
+      id: idVal,
+      name: item.name || 'Delivery Partner',
+      phone: cleanPhone || item.phone || item.mobile || '',
+      mobile: cleanPhone || item.mobile || item.phone || '',
+      zone: (item.zone || 'Kharadi').replace(' Zone', ''),
+      vehicleNo: item.vehicleNo || item.vehicleNumber || 'MH-12-FB-0000',
+      vehicleNumber: item.vehicleNumber || item.vehicleNo || 'MH-12-FB-0000',
+      vehicleType: item.vehicleType || 'Tata Ace (Chota Hathi)',
+      status: item.status || 'Active',
+      totalDeliveries: Number(item.totalDeliveries ?? item.deliveriesDone ?? 0),
+      assignedOrdersCount: Number(item.assignedOrdersCount ?? 0),
+      rating: Number(item.rating ?? 5.0),
+      avatar: item.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'
+    };
+  });
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const isConnected = isFirebaseConfigured();
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
-  // Primary application state — initialized from localStorage if available, otherwise starter records
-  const [orders, setOrders] = useState<Order[]>(() => getStoredOrFallback('orders', []));
-  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', initialZones));
-  const [joiners, setJoiners] = useState<Joiner[]>(() => getStoredOrFallback('joiners', initialJoiners));
-  const [drivers, setDrivers] = useState<Driver[]>(() => getStoredOrFallback('drivers', initialDrivers));
-  const [hotels, setHotels] = useState<Hotel[]>(() => getStoredOrFallback('hotels', []));
-  const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', initialProductsList));
-  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', initialPayments));
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', initialNotifications));
+  // Primary application state — initialized from central database
+  const [orders, setOrders] = useState<Order[]>(() => getInitialOrdersState());
+  const [zones, setZones] = useState<Zone[]>(() => getStoredOrFallback('zones', []));
+  const [joiners, setJoiners] = useState<Joiner[]>(() => deduplicateJoiners(getStoredOrFallback('joiners', [])));
+  const [drivers, setDrivers] = useState<Driver[]>(() => deduplicateDrivers(getStoredOrFallback('drivers', [])));
+  const [hotels, setHotels] = useState<Hotel[]>(() => getInitialHotelsState());
+  const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', []));
+  const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', []));
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', []));
+
+  // Real-time New Order Banner Popup State
+  const [newOrderAlert, setNewOrderAlert] = useState<{ order: Order; visible: boolean } | null>(null);
+  const dismissNewOrderAlert = () => setNewOrderAlert(null);
+
+  const isInitialOrderLoad = useRef(true);
+  const knownOrderIds = useRef<Set<string>>(new Set());
 
   // Sync state changes to localStorage
   useEffect(() => { saveToLocal('orders', orders); }, [orders]);
@@ -240,119 +595,128 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setFirestoreError(err.message || 'Firestore connection error');
     };
 
-    const normalizeOrderRecord = (ord: any): Order => ({
-      ...ord,
-      id: String(ord.id || ord.orderId || `FB${Math.floor(1000 + Math.random() * 9000)}`),
-      orderId: String(ord.orderId || ord.id || ''),
-      hotelName: ord.hotelName || ord.customerName || (ord.deliveryAddress?.name ? `${ord.deliveryAddress.name} (Customer)` : 'Hotel Partner'),
-      hotelId: ord.hotelId || '',
-      hotelImage: ord.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
-      joiner: ord.joiner || ord.joinerName || ord.assignedJoiner || 'Direct Partner',
-      joinerId: ord.joinerId || ord.joinedBy || '',
-      zone: (ord.zone || ord.hotelZone || ord.deliveryAddress?.area || 'Kharadi').replace(' Zone', ''),
-      hotelZone: (ord.hotelZone || ord.zone || 'Kharadi').replace(' Zone', ''),
-      amount: Number(ord.amount || ord.totalAmount || ord.subtotal || 0),
-      totalAmount: Number(ord.totalAmount || ord.amount || ord.subtotal || 0),
-      subtotal: Number(ord.subtotal || ord.amount || ord.totalAmount || 0),
-      deliveryCharge: Number(ord.deliveryCharge || 0),
-      date: ord.date || ord.orderDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      time: ord.time || ord.timeSlot || '10:00 AM',
-      timeSlot: ord.timeSlot || '8 AM - 10 AM',
-      status: ord.status || ord.orderStatus || 'Pending',
-      orderStatus: ord.orderStatus || ord.status || 'Pending',
-      paymentMode: ord.paymentMode || ord.paymentMethod || 'Online',
-      paymentStatus: ord.paymentStatus || 'Pending',
-      driver: (ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' && ord.driver !== '—') ? ord.driver : 'Not Assigned',
-      driverPhone: ord.driverPhone || '',
-      commission: Number(ord.commission ?? 100),
-      walletCredited: Boolean(ord.walletCredited || (ord.status === 'Delivered' && ord.bonusStatus?.includes('Credited'))),
-      deliveryAddress: ord.deliveryAddress || `${ord.hotelZone || ord.zone || 'Kharadi'}, Pune`,
-      items: (ord.items && ord.items.length > 0)
-        ? ord.items.map((item: any, i: number) => ({
-            id: item.id || item.productId || i + 1,
-            productId: item.productId || item.id || i + 1,
-            productName: item.productName || item.name || 'Produce Item',
-            name: item.name || item.productName || 'Produce Item',
-            qty: Number(item.qty || item.quantity || (typeof item.qty === 'string' ? parseFloat(item.qty) : 1)),
-            quantity: Number(item.quantity || item.qty || 1),
-            unit: item.unit || 'KG',
-            price: Number(item.price || 0),
-            total: Number(item.total || ((item.price || 0) * (item.quantity || item.qty || 1)))
-          }))
-        : []
-    });
-
-    const getMergedLocalOrders = (remoteOrders: any[]): Order[] => {
-      const combined = new Map<string, any>();
-      (remoteOrders || []).forEach(o => {
-        if (o) {
-          const key = String(o.orderId || o.id || '');
-          if (key) combined.set(key, o);
+    // Central Real-time Orders Listener (Firestore single source of truth)
+    const unsubOrders = orderService.subscribe(
+      (liveOrders) => {
+        if (!liveOrders) {
+          setOrders([]);
+          return;
         }
-      });
 
-      if (typeof window !== 'undefined') {
-        try {
-          const mobOrdersRaw = localStorage.getItem('farmerbox_mobile_orders');
-          if (mobOrdersRaw) {
-            const parsed = JSON.parse(mobOrdersRaw);
-            if (Array.isArray(parsed)) {
-              parsed.forEach(mo => {
-                if (mo) {
-                  const key = String(mo.orderId || mo.id || '');
-                  if (key && !combined.has(key)) {
-                    combined.set(key, mo);
-                  }
-                }
-              });
-            }
+        const cleanLiveOrders = deduplicateOrders(liveOrders);
+
+        // Check for new orders placed from mobile devices in real-time
+        if (!isInitialOrderLoad.current && cleanLiveOrders.length > 0) {
+          const freshOrder = cleanLiveOrders.find(
+            (o) => !knownOrderIds.current.has(o.orderId || o.id)
+          );
+
+          if (freshOrder) {
+            try {
+              soundEngine.playNotificationChime();
+            } catch {}
+
+            setNewOrderAlert({
+              order: freshOrder,
+              visible: true
+            });
+
+            // Automatically add top notification
+            addNotification({
+              title: `🔔 NEW ORDER #${freshOrder.orderId || freshOrder.id}`,
+              message: `${freshOrder.customerName || freshOrder.hotelName} placed an order for ₹${freshOrder.amount} in ${freshOrder.zoneName || freshOrder.zone} Zone`,
+              subtitle: `Partner: ${freshOrder.partnerName || freshOrder.joiner} • ${freshOrder.zoneName || freshOrder.zone}`,
+              userType: 'Admins',
+              status: 'Sent',
+              category: 'Orders',
+              iconType: 'order',
+              read: false
+            });
           }
-        } catch {}
+        }
+
+        // Record all current order IDs
+        knownOrderIds.current = new Set(cleanLiveOrders.map(o => o.orderId || o.id));
+        isInitialOrderLoad.current = false;
+        setOrders(cleanLiveOrders);
+      },
+      (err) => {
+        console.warn('Firestore orders live listener note:', err);
+        handleErr(err);
       }
+    );
 
-      return Array.from(combined.values()).map(normalizeOrderRecord);
-    };
-
-    const unsubOrders = subscribeToCollection<any>('orders', (data) => {
-      const allOrders = getMergedLocalOrders(data || []);
-      setOrders(allOrders);
+    // Live Wallet Transactions Listener
+    const unsubWalletTx = subscribeToCollection<WalletTransaction>('walletTransactions', (txList) => {
+      if (txList) {
+        setWalletTransactions(txList);
+      }
     }, handleErr);
 
     // Listen for live mobile app order & hotel dispatch events in the current session
     const handleOrderCreatedEvent = (e: any) => {
       const newOrd = e?.detail;
       if (newOrd) {
-        setOrders(prev => {
-          const key = String(newOrd.orderId || newOrd.id || '');
-          if (prev.some(o => String(o.orderId || o.id) === key)) return prev;
-          return [normalizeOrderRecord(newOrd), ...prev];
-        });
+        setOrders(prev => deduplicateOrders([newOrd, ...prev]));
       }
     };
 
     const handleHotelCreatedEvent = (e: any) => {
       const newHotel = e?.detail;
       if (newHotel) {
-        setHotels(prev => {
-          const key = String(newHotel.hotelId || newHotel.id || '');
-          if (prev.some(h => String(h.hotelId || h.id) === key)) return prev;
-          return [newHotel, ...prev];
-        });
+        setHotels(prev => deduplicateHotels([newHotel, ...prev]));
       }
     };
+
+    let syncChannel: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        syncChannel = new BroadcastChannel('farmerbox_sync');
+        syncChannel.onmessage = (event) => {
+          if (event.data?.type === 'ORDER_CREATED' && event.data.order) {
+            const incoming = event.data.order;
+            setOrders(prev => deduplicateOrders([incoming, ...prev]));
+          } else if (event.data?.type === 'HOTEL_CREATED' && event.data.hotel) {
+            const incomingHotel = event.data.hotel;
+            setHotels(prev => deduplicateHotels([incomingHotel, ...prev]));
+          }
+        };
+      } catch (e) {}
+    }
 
     if (typeof window !== 'undefined') {
       window.addEventListener('farmerbox_order_created', handleOrderCreatedEvent);
       window.addEventListener('farmerbox_hotel_created', handleHotelCreatedEvent);
     }
 
-    const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
-      const validZones = (z && z.length > 0) ? z : initialZones;
-      if ((!z || z.length === 0) && isFirebaseConfigured() && db && initialZones.length > 0) {
-        initialZones.forEach(zone => {
-          saveRecord('zones', zone, String(zone.id));
-        });
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'farmerbox_mobile_orders' || e.key === 'farmerbox_orders' || e.key === 'farmerbox_customer_orders') {
+        try {
+          if (e.newValue) {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setOrders(prev => deduplicateOrders([...parsed, ...prev]));
+            }
+          }
+        } catch {}
+      } else if (e.key === 'farmerbox_mobile_hotels' || e.key === 'farmerbox_hotels') {
+        try {
+          if (e.newValue) {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setHotels(prev => deduplicateHotels([...parsed, ...prev]));
+            }
+          }
+        } catch {}
       }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageEvent);
+    }
+
+    const unsubZones = subscribeToCollection<Zone>('zones', (z) => {
+      const validZones = z || [];
       setZones(validZones);
       setSelectedZone(prev => prev ? (validZones.find(item => String(item.id) === String(prev.id)) || validZones[0] || null) : (validZones[0] || null));
     }, handleErr);
@@ -361,71 +725,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let rawUsers: any[] = [];
 
     const syncAndNormalizeJoiners = () => {
-      const joinersMap = new Map<string, any>();
+      const allRaw: any[] = [...rawJoiners];
 
-      // 1. Add records from 'joiners' collection
-      rawJoiners.forEach((item: any, idx: number) => {
-        const idKey = String(item.id || item.uid || item.mobile || item.phone || idx);
-        joinersMap.set(idKey, item);
-      });
-
-      // 2. Add or merge records from 'users' collection where role is joiner
+      // Merge users where role is joiner
       rawUsers.forEach((u: any) => {
         const roleLower = String(u.role || '').toLowerCase();
         if (roleLower === 'joiner' || roleLower === 'hotel joiner' || roleLower.includes('joiner')) {
-          const idKey = String(u.uid || u.id || u.phone || u.mobile);
-          const cleanPhone = String(u.phone || u.mobile || u.phoneNumber || '').replace(/\D/g, '');
-          const existing = joinersMap.get(idKey) || (cleanPhone ? Array.from(joinersMap.values()).find(j => String(j.mobile || j.phone).replace(/\D/g, '') === cleanPhone) : null);
-          
-          joinersMap.set(idKey, {
-            ...(existing || {}),
-            ...u,
-            id: u.uid || u.id || existing?.id || `usr_${cleanPhone}`,
-            name: u.name || existing?.name || `Joiner ${cleanPhone.slice(-4)}`,
-            mobile: cleanPhone || existing?.mobile || '',
-            phone: cleanPhone || existing?.phone || '',
-            email: u.email || existing?.email || `${cleanPhone}@farmerbox.in`,
-            zone: (u.zone || existing?.zone || 'Kharadi').replace(' Zone', ''),
-            status: u.status || existing?.status || 'Active'
-          });
+          allRaw.push(u);
         }
       });
 
-      const normalizedJoiners: Joiner[] = Array.from(joinersMap.values()).map((item: any, idx: number) => ({
-        ...item,
-        id: item.id || `usr_${idx + 1}`,
-        name: item.name || 'Joiner Partner',
-        mobile: item.mobile || item.phone || '',
-        phone: item.phone || item.mobile || '',
-        email: item.email || `${(item.name || 'joiner').toLowerCase().replace(/\s+/g, '')}@farmerbox.in`,
-        zone: (item.zone || 'Kharadi').replace(' Zone', ''),
-        joinerCode: item.joinerCode || `JN${String(item.id || item.mobile || '').replace(/\D/g, '').slice(-4) || (1001 + idx)}`,
-        status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-        totalHotels: Number(item.totalHotels || item.hotelsCount || 0),
-        totalOrders: Number(item.totalOrders || item.ordersCount || 0),
-        totalEarnings: Number(item.totalEarnings || item.commissionEarned || (item.walletBalance || 0)),
-        commissionEarned: Number(item.commissionEarned || item.totalEarnings || (item.walletBalance || 0)),
-        walletBalance: Number(item.walletBalance ?? item.totalEarnings ?? 0),
-        paidAmount: Number(item.paidAmount ?? 0),
-        pendingAmount: Number(item.pendingAmount ?? item.walletBalance ?? 0),
-        avatar: item.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
-        upiId: item.upiId || `${(item.name || 'joiner').toLowerCase().replace(/\s+/g, '')}@okaxis`,
-        bankName: item.bankName || 'HDFC Bank',
-        accountNo: item.accountNo || '•••• •••• 4521',
-        ifscCode: item.ifscCode || 'HDFC0001234'
-      }));
+      // Merge active mobile joiner session if present
+      if (typeof window !== 'undefined') {
+        try {
+          const mobSessionRaw = localStorage.getItem('farmerbox_mobile_joiner_session');
+          if (mobSessionRaw) {
+            const ms = JSON.parse(mobSessionRaw);
+            if (ms && (ms.name || ms.uid || ms.phone)) {
+              allRaw.push(ms);
+            }
+          }
+        } catch {}
+      }
 
+      const normalizedJoiners = deduplicateJoiners(allRaw);
       setJoiners(normalizedJoiners);
-      setSelectedJoiner(prev => prev ? (normalizedJoiners.find(item => String(item.id) === String(prev.id)) || normalizedJoiners[0] || null) : (normalizedJoiners[0] || null));
+      setSelectedJoiner(prev => prev ? (normalizedJoiners.find(item => String(item.id) === String(prev.id) || (item.mobile && String(item.mobile).slice(-10) === String(prev.mobile || '').slice(-10))) || normalizedJoiners[0] || null) : (normalizedJoiners[0] || null));
     };
 
+    // Clean up any legacy dummy joiners & drivers from Firestore collections
+    if (isFirebaseConfigured() && db) {
+      deleteRecord('joiners', 'usr_9822011111').catch(() => {});
+      deleteRecord('joiners', 'usr_9822022222').catch(() => {});
+      deleteRecord('joiners', 'usr_9822033333').catch(() => {});
+      deleteRecord('users', 'usr_9822011111').catch(() => {});
+      deleteRecord('users', 'usr_9822022222').catch(() => {});
+      deleteRecord('users', 'usr_9822033333').catch(() => {});
+
+      deleteRecord('drivers', '1').catch(() => {});
+      deleteRecord('drivers', '2').catch(() => {});
+      deleteRecord('drivers', '3').catch(() => {});
+      deleteRecord('drivers', '9876543210').catch(() => {});
+      deleteRecord('drivers', '9876543211').catch(() => {});
+      deleteRecord('drivers', '9876543212').catch(() => {});
+      deleteRecord('drivers', 'Santosh Shinde').catch(() => {});
+      deleteRecord('drivers', 'Suresh Jadhav').catch(() => {});
+      deleteRecord('drivers', 'Ramesh Pawar').catch(() => {});
+    }
+
     const unsubJoiners = subscribeToCollection<any>('joiners', (j) => {
-      if ((!j || j.length === 0) && isFirebaseConfigured() && db && initialJoiners.length > 0) {
-        initialJoiners.forEach(joiner => {
-          saveRecord('joiners', joiner, String(joiner.id));
-        });
-      }
-      rawJoiners = (j && j.length > 0) ? j : initialJoiners;
+      rawJoiners = j || [];
       syncAndNormalizeJoiners();
     }, handleErr);
 
@@ -435,74 +784,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubDrivers = subscribeToCollection<Driver>('drivers', (d) => {
-      const validDrivers = (d && d.length > 0) ? d : initialDrivers;
-      if ((!d || d.length === 0) && isFirebaseConfigured() && db && initialDrivers.length > 0) {
-        initialDrivers.forEach((drv: Driver) => {
-          saveRecord('drivers', drv, String(drv.id));
-        });
-      }
+      const validDrivers = deduplicateDrivers(d || []);
       setDrivers(validDrivers);
       setSelectedDriver(prev => prev ? (validDrivers.find((item: Driver) => String(item.id) === String(prev.id)) || validDrivers[0] || null) : (validDrivers[0] || null));
     }, handleErr);
 
     const unsubHotels = subscribeToCollection<any>('hotels', (h) => {
-      const combinedHotels = new Map<string, any>();
-      (h || []).forEach(item => {
-        if (item) {
-          const key = String(item.hotelId || item.id || '');
-          if (key) combinedHotels.set(key, item);
-        }
-      });
-
+      const list: any[] = Array.isArray(h) ? [...h] : [];
       if (typeof window !== 'undefined') {
         try {
           const mobHotelsRaw = localStorage.getItem('farmerbox_mobile_hotels');
           if (mobHotelsRaw) {
             const parsed = JSON.parse(mobHotelsRaw);
-            if (Array.isArray(parsed)) {
-              parsed.forEach(mh => {
-                if (mh) {
-                  const key = String(mh.hotelId || mh.id || '');
-                  if (key && !combinedHotels.has(key)) {
-                    combinedHotels.set(key, mh);
-                  }
-                }
-              });
-            }
+            if (Array.isArray(parsed)) list.push(...parsed);
           }
         } catch {}
       }
 
-      const rawHotelsList = Array.from(combinedHotels.values());
-      const normalizedHotels: Hotel[] = rawHotelsList.map((item: any, idx: number) => ({
-        ...item,
-        id: item.id || `HT${Date.now().toString().slice(-6)}_${idx}`,
-        name: item.name || 'Unnamed Hotel',
-        ownerName: item.ownerName || item.contactPerson || 'Manager',
-        contactPerson: item.contactPerson || item.ownerName || 'Manager',
-        mobile: item.mobile || item.phone || '',
-        phone: item.phone || item.mobile || '',
-        email: item.email || '',
-        zone: item.zone || 'Baner',
-        joiner: item.joiner || item.assignedJoiner || 'Direct Partner',
-        assignedJoiner: item.assignedJoiner || item.joiner || 'Direct Partner',
-        joinedBy: item.joinedBy || item.joinerId || '',
-        joinerId: item.joinerId || item.joinedBy || '',
-        address: item.address || `${item.zone || 'Baner'}, Pune`,
-        totalOrders: Number(item.totalOrders ?? item.orders ?? 0),
-        orders: Number(item.orders ?? item.totalOrders ?? 0),
-        dailyOrderKg: Number(item.dailyOrderKg ?? 0),
-        type: item.type || 'Restaurant',
-        totalSpent: Number(item.totalSpent ?? 0),
-        registrationDate: item.registrationDate || item.joinedDate || item.createdAt?.slice?.(0, 10) || '2026-09-01',
-        gstNumber: item.gstNumber || item.gst || '',
-        fssaiNumber: item.fssaiNumber || item.fssai || '',
-        rating: Number(item.rating || 4.8),
-        status: (item.status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-        image: item.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100'
-      }));
+      const normalizedHotels = deduplicateHotels(list);
       setHotels(normalizedHotels);
-      setSelectedHotel(prev => prev ? (normalizedHotels.find(item => String(item.id) === String(prev.id)) || normalizedHotels[0] || null) : (normalizedHotels[0] || null));
+      setSelectedHotel(prev => prev ? (normalizedHotels.find(item => String(item.id) === String(prev.id) || String(item.hotelId) === String(prev.id)) || normalizedHotels[0] || null) : (normalizedHotels[0] || null));
     }, handleErr);
 
     const unsubProducts = subscribeToCollection<Product>('products', (p) => {
@@ -562,9 +863,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('farmerbox_order_created', handleOrderCreatedEvent);
+        window.removeEventListener('farmerbox_hotel_created', handleHotelCreatedEvent);
+        window.removeEventListener('storage', handleStorageEvent);
+      }
+      if (syncChannel) {
+        try {
+          syncChannel.close();
+        } catch (e) {}
+      }
       unsubOrders();
       unsubZones();
       unsubJoiners();
+      unsubUsers();
       unsubDrivers();
       unsubHotels();
       unsubProducts();
@@ -573,7 +885,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  const [activeTab, setActiveTab] = useState<string>('Dashboard');
+  const [activeTab, setActiveTab] = useState<string>('Orders');
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
@@ -810,126 +1122,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
-    const existing = orders.find(o => String(o.id) === String(orderId));
-    if (existing) {
-      const orderAmount = Number(existing.amount || existing.totalAmount || 0);
-      const isAlreadyCredited = Boolean(existing.walletCredited);
-      const shouldCreditWallet = newStatus === 'Delivered' && !isAlreadyCredited;
-
-      const updated = {
-        ...existing,
-        status: newStatus,
-        orderStatus: newStatus,
-        isBonusEligible: true,
-        bonusAmount: 100,
-        bonusStatus: newStatus === 'Delivered' ? 'Approved & Credited to Wallet' : 'Pending Delivery Approval',
-        commission: 100,
-        walletCredited: isAlreadyCredited || shouldCreditWallet,
-        updatedAt: new Date().toISOString()
-      };
-      await saveRecord('orders', updated);
-
-      // If delivery is marked 'Delivered' by Admin or Driver, credit ₹100 to the Joiner / Hotel Partner's wallet
-      if (shouldCreditWallet) {
-        const joinerName = existing.joiner || 'Partner';
-        const targetJoiner = joiners.find(j => 
-          (j.name && joinerName && j.name.toLowerCase() === joinerName.toLowerCase()) || 
-          (existing.joinerId && String(j.id) === String(existing.joinerId)) ||
-          (existing.joinerPhone && j.mobile && j.mobile.replace(/\D/g, '') === existing.joinerPhone.replace(/\D/g, ''))
-        );
-
-        if (targetJoiner) {
-          const newTotalEarnings = (Number(targetJoiner.totalEarnings) || 0) + 100;
-          const newCommissionEarned = (Number(targetJoiner.commissionEarned) || 0) + 100;
-          const newWalletBalance = (Number((targetJoiner as any).walletBalance) || 0) + 100;
-
-          const updatedJoiner = {
-            ...targetJoiner,
-            totalEarnings: newTotalEarnings,
-            commissionEarned: newCommissionEarned,
-            walletBalance: newWalletBalance,
-            updatedAt: new Date().toISOString()
-          };
-
-          setJoiners(prev => prev.map(j => String(j.id) === String(targetJoiner.id) ? updatedJoiner : j));
-          await saveRecord('joiners', updatedJoiner, String(targetJoiner.id));
-
-          // Also update Firestore 'users' doc if exists
-          if (db && targetJoiner.id) {
-            try {
-              const cleanPhone = (targetJoiner.mobile || '').replace(/\D/g, '');
-              const docId = String(targetJoiner.id).startsWith('usr_') ? String(targetJoiner.id) : `usr_${cleanPhone || targetJoiner.id}`;
-              const userDocRef = doc(db, 'users', docId);
-              setDoc(userDocRef, {
-                walletBalance: newWalletBalance,
-                totalEarnings: newTotalEarnings,
-                commissionEarned: newCommissionEarned,
-                updatedAt: new Date().toISOString()
-              }, { merge: true }).catch(() => {});
-            } catch (e) {
-              // ignore
-            }
-          }
-        }
-
-        // Also add a Payment / Wallet Transaction Record
-        const newPaymentTxn: PaymentTransaction = {
-          id: Date.now(),
-          dateTime: new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
-          referenceId: `PAY${Math.floor(100000 + Math.random() * 900000)}`,
-          type: 'Joiner Commission',
-          fromTo: existing.joiner || existing.hotelName,
-          orderId: String(orderId),
-          amount: 100,
-          status: 'Success',
-          paymentMode: 'Wallet'
-        };
-        addPayment(newPaymentTxn);
-
-        // Notify Joiner & Admin of the ₹100 Wallet Credit
-        addNotification({
-          title: `₹100 Wallet Reward Credited! 🎉`,
-          message: `Order #${orderId} delivered to ${existing.hotelName}. ₹100 has been credited to ${existing.joiner || 'Partner'}'s wallet account!`,
-          subtitle: `${existing.hotelName} • ₹100 Wallet Balance Added`,
-          userType: 'Joiners',
-          status: 'Sent',
-          category: 'Commission',
-          iconType: 'commission',
-          read: false
-        });
-      }
-
-      addNotification({
-        title: `Order #${orderId} ${newStatus}`,
-        message: `Order status changed to ${newStatus} for ${existing.hotelName}`,
-        subtitle: `${existing.hotelName} • ${newStatus}`,
-        userType: 'All Users',
-        status: 'Sent',
-        category: 'Orders',
-        iconType: 'order',
-        read: false
-      });
+    try {
+      await orderService.updateStatus(orderId, newStatus);
+    } catch (e) {
+      console.warn('Notice updating status in firestore:', e);
     }
 
     setOrders(prev =>
       prev.map(ord => {
-        if (String(ord.id) === String(orderId)) {
-          const isAlreadyCredited = Boolean(ord.walletCredited);
-          const shouldCredit = newStatus === 'Delivered' && !isAlreadyCredited;
+        if (String(ord.id) === String(orderId) || String(ord.orderId) === String(orderId)) {
           return {
             ...ord,
             status: newStatus,
             orderStatus: newStatus,
-            isBonusEligible: true,
-            bonusAmount: 100,
-            bonusStatus: newStatus === 'Delivered' ? 'Approved & Credited to Wallet' : 'Pending Delivery Approval',
-            commission: 100,
-            walletCredited: isAlreadyCredited || shouldCredit
+            updatedAt: new Date().toISOString()
           };
         }
         return ord;
       })
     );
+
+    if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId) === String(orderId))) {
+      setSelectedOrder(prev => prev ? { ...prev, status: newStatus, orderStatus: newStatus } : null);
+    }
+
+    addNotification({
+      title: `Order #${orderId} ${newStatus}`,
+      message: `Order status changed to ${newStatus}`,
+      subtitle: `Status: ${newStatus}`,
+      userType: 'All Users',
+      status: 'Sent',
+      category: 'Orders',
+      iconType: 'order',
+      read: false
+    });
   };
 
   const assignDriverToOrder = async (
@@ -939,7 +1165,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     driverId?: string | number,
     newStatus: OrderStatus = 'Out for Delivery'
   ) => {
-    const existing = orders.find(o => String(o.id) === String(orderId));
     const matchedDriver = drivers.find(d => 
       (driverName && d.name && d.name.toLowerCase() === driverName.toLowerCase()) ||
       (driverId && String(d.id) === String(driverId))
@@ -949,39 +1174,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const finalDriverPhone = driverPhone || matchedDriver?.mobile || '9876123456';
     const finalDriverId = driverId || matchedDriver?.id || 'DR01';
 
-    if (existing) {
-      const updated: Order = {
-        ...existing,
-        driver: finalDriverName,
-        driverPhone: finalDriverPhone,
-        driverId: finalDriverId,
-        status: newStatus,
-        orderStatus: newStatus,
-        updatedAt: new Date().toISOString()
-      };
-
-      await saveRecord('orders', updated);
-
-      addNotification({
-        title: `Driver Assigned to Order #${orderId} 🚚`,
-        message: `Order #${orderId} (${existing.hotelName}) has been assigned to driver ${finalDriverName}. Status: ${newStatus}.`,
-        subtitle: `${finalDriverName} • ${newStatus}`,
-        userType: 'Drivers',
-        status: 'Sent',
-        category: 'Orders',
-        iconType: 'driver',
-        read: false
-      });
+    try {
+      await orderService.assignDriver(orderId, finalDriverId, finalDriverName, finalDriverPhone, newStatus);
+    } catch (e) {
+      console.warn('Notice assigning driver in firestore:', e);
     }
 
     setOrders(prev =>
       prev.map(ord => {
-        if (String(ord.id) === String(orderId)) {
+        if (String(ord.id) === String(orderId) || String(ord.orderId) === String(orderId)) {
           return {
             ...ord,
             driver: finalDriverName,
             driverPhone: finalDriverPhone,
             driverId: finalDriverId,
+            deliveryPartnerId: finalDriverId,
+            deliveryPartnerName: finalDriverName,
             status: newStatus,
             orderStatus: newStatus
           };
@@ -989,14 +1197,114 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return ord;
       })
     );
+
+    if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId) === String(orderId))) {
+      setSelectedOrder(prev => prev ? {
+        ...prev,
+        driver: finalDriverName,
+        driverPhone: finalDriverPhone,
+        driverId: finalDriverId,
+        deliveryPartnerId: finalDriverId,
+        deliveryPartnerName: finalDriverName,
+        status: newStatus,
+        orderStatus: newStatus
+      } : null);
+    }
+
+    addNotification({
+      title: `Driver Assigned to Order #${orderId} 🚚`,
+      message: `Order #${orderId} assigned to driver ${finalDriverName}. Status: ${newStatus}.`,
+      subtitle: `${finalDriverName} • ${newStatus}`,
+      userType: 'Drivers',
+      status: 'Sent',
+      category: 'Orders',
+      iconType: 'driver',
+      read: false
+    });
   };
 
   const acceptOrder = async (orderId: string, driverName?: string) => {
     if (driverName) {
       await assignDriverToOrder(orderId, driverName, undefined, undefined, 'Out for Delivery');
     } else {
-      await updateOrderStatus(orderId, 'Confirmed');
+      await updateOrderStatus(orderId, 'Accepted');
     }
+  };
+
+  // Delivery Verification & Commission Release (Admin Approves Delivery)
+  const approveDelivery = async (orderId: string): Promise<{ success: boolean; message: string }> => {
+    const res = await orderService.approveDelivery(orderId, adminProfile.name || 'Super Admin');
+
+    if (res.success) {
+      setOrders(prev =>
+        prev.map(ord => {
+          if (String(ord.id) === String(orderId) || String(ord.orderId) === String(orderId)) {
+            const totalAmt = Number(ord.totalAmount ?? ord.amount ?? 0);
+            const isEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : totalAmt > 1500;
+            return {
+              ...ord,
+              adminApproved: true,
+              status: 'Delivered',
+              orderStatus: 'Delivered',
+              commissionAmount: isEligible ? 100 : 0,
+              commissionStatus: isEligible ? 'credited' : 'not_eligible',
+              walletCredited: isEligible
+            };
+          }
+          return ord;
+        })
+      );
+
+      if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId) === String(orderId))) {
+        setSelectedOrder(prev => {
+          if (!prev) return null;
+          const totalAmt = Number(prev.totalAmount ?? prev.amount ?? 0);
+          const isEligible = res.isBonusEligible !== undefined ? res.isBonusEligible : totalAmt > 1500;
+          return {
+            ...prev,
+            adminApproved: true,
+            status: 'Delivered',
+            orderStatus: 'Delivered',
+            commissionAmount: isEligible ? 100 : 0,
+            commissionStatus: isEligible ? 'credited' : 'not_eligible',
+            walletCredited: isEligible
+          };
+        });
+      }
+
+      const isBonusGiven = res.isBonusEligible !== false;
+      addNotification({
+        title: `Delivery Approved: Order #${orderId} 🎉`,
+        message: isBonusGiven
+          ? `Delivery verified! ₹100 commission credited to partner's wallet.`
+          : `Delivery verified! Order total is ₹1,500 or below (not eligible for ₹100 bonus).`,
+        subtitle: isBonusGiven ? `₹100 Commission Credited` : `Order Delivered`,
+        userType: 'Joiners',
+        status: 'Sent',
+        category: 'Commission',
+        iconType: 'commission',
+        read: false
+      });
+    }
+
+    return res;
+  };
+
+  const rejectDelivery = async (orderId: string, reason?: string): Promise<void> => {
+    await orderService.rejectDelivery(orderId, reason || 'Delivery verification rejected by Admin');
+    setOrders(prev =>
+      prev.map(ord => {
+        if (String(ord.id) === String(orderId) || String(ord.orderId) === String(orderId)) {
+          return {
+            ...ord,
+            adminApproved: false,
+            commissionStatus: 'rejected',
+            rejectionReason: reason || 'Delivery verification rejected by Admin'
+          };
+        }
+        return ord;
+      })
+    );
   };
 
   const addZone = async (name: string, area?: string, status?: 'Active' | 'Inactive') => {
@@ -1052,16 +1360,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addJoiner = async (name: string, mobile: string, zone: string, email?: string, status?: 'Active' | 'Inactive') => {
-    const newId = Date.now();
-    const formattedCode = `JN${String(joiners.length + 1).padStart(3, '0')}`;
+  const addJoiner = async (name: string, mobile: string, zone: string, email?: string, status?: 'Active' | 'Inactive', password?: string) => {
+    const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+    const docId = `usr_${cleanMobile || Date.now()}`;
+    const formattedCode = `JN${cleanMobile.slice(-4) || String(joiners.length + 1).padStart(3, '0')}`;
+    const dummyPass = password?.trim() || 'FarmerBox@123';
+    const cleanEmail = (email || `${name.trim().toLowerCase().replace(/\s+/g, '')}@farmerbox.in`).trim();
+
     const newJoiner: Joiner = {
-      id: newId,
+      id: docId,
+      uid: docId,
       joinerCode: formattedCode,
       name: name.trim(),
-      mobile: mobile.trim(),
-      email: (email || `${name.trim().toLowerCase().replace(/\s+/g, '')}@farmerbox.in`).trim(),
-      zone: zone || 'Kharadi',
+      mobile: cleanMobile,
+      phone: cleanMobile,
+      email: cleanEmail,
+      password: dummyPass,
+      dummyPassword: dummyPass,
+      zone: (zone || 'Kharadi').replace(' Zone', ''),
       totalHotels: 0,
       totalOrders: 0,
       totalEarnings: 0,
@@ -1075,11 +1391,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Immediate optimistic state update
-    setJoiners(prev => [newJoiner, ...prev.filter(j => String(j.id) !== String(newId))]);
+    setJoiners(prev => deduplicateJoiners([newJoiner, ...prev]));
     setSelectedJoiner(newJoiner);
 
     try {
-      await saveRecord('joiners', newJoiner, String(newId));
+      await saveRecord('joiners', newJoiner, docId);
+      // Save credentials in users collection for instant mobile login
+      await saveRecord('users', {
+        id: docId,
+        uid: docId,
+        name: name.trim(),
+        phone: cleanMobile,
+        mobile: cleanMobile,
+        email: cleanEmail,
+        role: 'joiner',
+        password: dummyPass,
+        zone: (zone || 'Kharadi').replace(' Zone', ''),
+        status: status || 'Active',
+        createdAt: new Date().toISOString()
+      }, docId);
     } catch (e) {
       console.warn('Could not persist joiner to firestore:', e);
     }
@@ -1120,6 +1450,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const updated = { ...existing, ...data };
       try {
         await saveRecord('joiners', updated, String(joinerId));
+        // Keep users collection credentials in sync for mobile login
+        const cleanMobile = (updated.mobile || updated.phone || '').replace(/\D/g, '').slice(-10);
+        const docId = `usr_${cleanMobile || joinerId}`;
+        await saveRecord('users', {
+          id: docId,
+          uid: docId,
+          name: updated.name,
+          phone: cleanMobile,
+          mobile: cleanMobile,
+          email: updated.email,
+          role: 'joiner',
+          password: updated.password || updated.dummyPassword || 'FarmerBox@123',
+          zone: (updated.zone || 'Kharadi').replace(' Zone', ''),
+          status: updated.status || 'Active',
+          updatedAt: new Date().toISOString()
+        }, docId);
       } catch (e) {
         console.warn('Could not update joiner in firestore:', e);
       }
@@ -1127,30 +1473,131 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteJoiner = async (joinerId: number | string) => {
-    const target = joiners.find(j => String(j.id) === String(joinerId) || String(j.mobile || '').replace(/\D/g, '') === String(joinerId).replace(/\D/g, ''));
+    const idStr = String(joinerId);
+    const target = joiners.find(j => 
+      String(j.id) === idStr || 
+      (j.mobile && String(j.mobile).replace(/\D/g, '') === idStr.replace(/\D/g, '')) ||
+      (j.phone && String(j.phone).replace(/\D/g, '') === idStr.replace(/\D/g, ''))
+    );
 
-    // Immediate optimistic update
-    setJoiners(prev => prev.filter(j => String(j.id) !== String(joinerId) && String(j.mobile || '').replace(/\D/g, '') !== String(joinerId).replace(/\D/g, '')));
-    if (selectedJoiner && (String(selectedJoiner.id) === String(joinerId) || String(selectedJoiner.mobile || '').replace(/\D/g, '') === String(joinerId).replace(/\D/g, ''))) {
-      const remaining = joiners.filter(j => String(j.id) !== String(joinerId) && String(j.mobile || '').replace(/\D/g, '') !== String(joinerId).replace(/\D/g, ''));
-      setSelectedJoiner(remaining.length > 0 ? remaining[0] : null);
+    const cleanPhone = target ? String(target.mobile || target.phone || '').replace(/\D/g, '').slice(-10) : idStr.replace(/\D/g, '').slice(-10);
+
+    // Save to persistent blacklist so real-time Firestore listeners don't resurrect it
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedRaw = localStorage.getItem('farmerbox_deleted_joiner_ids') || '[]';
+        const deletedArr: string[] = JSON.parse(deletedRaw);
+        if (idStr) deletedArr.push(idStr);
+        if (target?.id) deletedArr.push(String(target.id));
+        if (cleanPhone) {
+          deletedArr.push(cleanPhone);
+          deletedArr.push(`usr_${cleanPhone}`);
+        }
+        localStorage.setItem('farmerbox_deleted_joiner_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+      } catch {}
     }
 
+    // 1. Immediate in-memory filtering for joiners state
+    setJoiners(prev => prev.filter(j => 
+      String(j.id) !== idStr && 
+      (!target || String(j.id) !== String(target.id)) &&
+      (!cleanPhone || String(j.mobile || j.phone || '').replace(/\D/g, '').slice(-10) !== cleanPhone)
+    ));
+
+    if (selectedJoiner && (
+      String(selectedJoiner.id) === idStr || 
+      (target && String(selectedJoiner.id) === String(target.id)) ||
+      (cleanPhone && String(selectedJoiner.mobile || selectedJoiner.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone)
+    )) {
+      setSelectedJoiner(null);
+    }
+
+    // 2. Remove from LocalStorage session caches
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('farmerbox_joiners');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            const rem = parsed.filter((j: any) => 
+              String(j.id || j.uid || '') !== idStr &&
+              (!target || String(j.id || j.uid || '') !== String(target.id)) &&
+              (!cleanPhone || String(j.mobile || j.phone || '').replace(/\D/g, '').slice(-10) !== cleanPhone)
+            );
+            localStorage.setItem('farmerbox_joiners', JSON.stringify(rem));
+          }
+        }
+        const mobSessionRaw = localStorage.getItem('farmerbox_mobile_joiner_session');
+        if (mobSessionRaw) {
+          const ms = JSON.parse(mobSessionRaw);
+          const msPhone = String(ms?.phone || ms?.mobile || '').replace(/\D/g, '').slice(-10);
+          if (msPhone === cleanPhone || String(ms?.uid || ms?.id) === idStr) {
+            localStorage.removeItem('farmerbox_mobile_joiner_session');
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Persistent Firestore Deletion across collections
     try {
       await deleteRecord('joiners', joinerId);
       await deleteRecord('users', joinerId);
-      if (target) {
-        if (target.id && String(target.id) !== String(joinerId)) {
-          await deleteRecord('joiners', target.id);
-          await deleteRecord('users', target.id);
-        }
-        if (target.mobile) {
-          await deleteRecord('joiners', target.mobile);
-          await deleteRecord('users', target.mobile);
-        }
+      await deleteRecord('hotelJoiners', joinerId);
+      if (target?.id && String(target.id) !== idStr) {
+        await deleteRecord('joiners', target.id);
+        await deleteRecord('users', target.id);
+        await deleteRecord('hotelJoiners', target.id);
+      }
+      if (cleanPhone) {
+        await deleteRecord('joiners', cleanPhone);
+        await deleteRecord('joiners', `usr_${cleanPhone}`);
+        await deleteRecord('users', cleanPhone);
+        await deleteRecord('users', `usr_${cleanPhone}`);
+        await deleteRecord('hotelJoiners', cleanPhone);
+        await deleteRecord('hotelJoiners', `usr_${cleanPhone}`);
       }
     } catch (e) {
       console.warn('Could not delete joiner from firestore:', e);
+    }
+  };
+
+  const deleteAllJoiners = async () => {
+    // 1. In-memory reset
+    const allCurrent = [...joiners];
+    setJoiners([]);
+    setSelectedJoiner(null);
+
+    // 2. Local storage purge and blacklist
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('farmerbox_joiners');
+        localStorage.removeItem('farmerbox_mobile_joiner_session');
+        const deletedArr: string[] = allCurrent.flatMap(j => {
+          const ph = String(j.mobile || j.phone || '').replace(/\D/g, '').slice(-10);
+          const id = String(j.id || (j as any).uid || '');
+          return [id, ph, `usr_${ph}`].filter(Boolean);
+        });
+        localStorage.setItem('farmerbox_deleted_joiner_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+      } catch {}
+    }
+
+    // 3. Persistent Firestore purge
+    try {
+      for (const j of allCurrent) {
+        const idStr = String(j.id);
+        const cleanPhone = String(j.mobile || j.phone || '').replace(/\D/g, '').slice(-10);
+        deleteRecord('joiners', idStr).catch(() => {});
+        deleteRecord('users', idStr).catch(() => {});
+        deleteRecord('hotelJoiners', idStr).catch(() => {});
+        if (cleanPhone) {
+          deleteRecord('joiners', cleanPhone).catch(() => {});
+          deleteRecord('joiners', `usr_${cleanPhone}`).catch(() => {});
+          deleteRecord('users', cleanPhone).catch(() => {});
+          deleteRecord('users', `usr_${cleanPhone}`).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Could not delete all joiners from firestore:', e);
     }
   };
 
@@ -1184,11 +1631,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addressVal = `${zoneVal}, Pune`;
     }
 
+    const docId = `HT${Date.now().toString().slice(-6)}`;
     const newHotel: Hotel = {
-      id: Date.now(),
+      id: docId,
+      hotelId: docId,
       name: nameVal,
       ownerName: ownerVal,
+      contactPerson: ownerVal,
       mobile: mobileVal,
+      phone: mobileVal,
       email: `${nameVal.toLowerCase().replace(/\s+/g, '')}@hotel.com`,
       zone: zoneVal,
       joiner: joinerVal || 'Admin',
@@ -1198,6 +1649,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       createdBy: adminProfile.name || 'Super Admin',
       address: addressVal,
       totalOrders: 0,
+      orders: 0,
       totalSpent: 0,
       registrationDate: 'Just now',
       gstNumber: '27ABCDE1234F9Z9',
@@ -1206,8 +1658,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       status: 'Active',
       image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300'
     };
-    await saveRecord('hotels', newHotel);
-    setHotels(prev => [newHotel, ...prev]);
+    await saveRecord('hotels', newHotel, docId);
+    setHotels(prev => deduplicateHotels([newHotel, ...prev]));
     addNotification({
       title: 'New Hotel Added by Admin',
       message: `${newHotel.name} registered by Admin in ${newHotel.zone} Zone`,
@@ -1233,24 +1685,143 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteHotel = async (hotelId: number | string) => {
-    const target = hotels.find(h => String(h.id) === String(hotelId) || String(h.hotelId || '') === String(hotelId));
-    setHotels(prev => prev.filter(h => String(h.id) !== String(hotelId) && String(h.hotelId || '') !== String(hotelId)));
-    if (selectedHotel && (String(selectedHotel.id) === String(hotelId) || String(selectedHotel.hotelId || '') === String(hotelId))) {
-      const remaining = hotels.filter(h => String(h.id) !== String(hotelId) && String(h.hotelId || '') !== String(hotelId));
-      setSelectedHotel(remaining.length > 0 ? remaining[0] : null);
+    const idStr = String(hotelId).trim();
+    const target = hotels.find(h => 
+      String(h.id) === idStr || 
+      String(h.hotelId || '') === idStr ||
+      (h.mobile && String(h.mobile).replace(/\D/g, '').slice(-10) === idStr.replace(/\D/g, '').slice(-10)) ||
+      (h.phone && String(h.phone).replace(/\D/g, '').slice(-10) === idStr.replace(/\D/g, '').slice(-10))
+    );
+
+    const targetHotelId = target?.hotelId ? String(target.hotelId).trim() : '';
+    const cleanPhone = target ? String(target.mobile || target.phone || '').replace(/\D/g, '').slice(-10) : (idStr.replace(/\D/g, '').length >= 10 ? idStr.replace(/\D/g, '').slice(-10) : '');
+    const cleanName = target ? String(target.name || (target as any).hotelName || '').trim().toLowerCase() : '';
+    const phoneNameKey = cleanPhone && cleanName ? `${cleanName}_${cleanPhone}` : '';
+
+    // 1. Add to persistent blacklist in localStorage so it can NEVER resurrect
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedRaw = localStorage.getItem('farmerbox_deleted_hotel_ids') || '[]';
+        const deletedArr: string[] = JSON.parse(deletedRaw);
+        if (idStr) deletedArr.push(idStr);
+        if (targetHotelId) deletedArr.push(targetHotelId);
+        if (target?.id) deletedArr.push(String(target.id));
+        if (cleanPhone) deletedArr.push(cleanPhone);
+        if (phoneNameKey) deletedArr.push(phoneNameKey);
+        if (cleanName) deletedArr.push(cleanName);
+        localStorage.setItem('farmerbox_deleted_hotel_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+
+        // Purge from farmerbox_hotels
+        const storedAdmin = localStorage.getItem('farmerbox_hotels');
+        if (storedAdmin) {
+          const parsed = JSON.parse(storedAdmin);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((h: any) => {
+              const hId = String(h.id || h.hotelId || '');
+              const hPhone = String(h.mobile || h.phone || '').replace(/\D/g, '').slice(-10);
+              const hName = String(h.name || h.hotelName || '').trim().toLowerCase();
+              return hId !== idStr && hId !== targetHotelId && (!target || hId !== String(target.id)) && (!cleanPhone || hPhone !== cleanPhone) && (!cleanName || hName !== cleanName);
+            });
+            localStorage.setItem('farmerbox_hotels', JSON.stringify(filtered));
+          }
+        }
+
+        // Purge from farmerbox_mobile_hotels
+        const storedMob = localStorage.getItem('farmerbox_mobile_hotels');
+        if (storedMob) {
+          const parsed = JSON.parse(storedMob);
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((h: any) => {
+              const hId = String(h.id || h.hotelId || '');
+              const hPhone = String(h.mobile || h.phone || '').replace(/\D/g, '').slice(-10);
+              const hName = String(h.name || h.hotelName || '').trim().toLowerCase();
+              return hId !== idStr && hId !== targetHotelId && (!target || hId !== String(target.id)) && (!cleanPhone || hPhone !== cleanPhone) && (!cleanName || hName !== cleanName);
+            });
+            localStorage.setItem('farmerbox_mobile_hotels', JSON.stringify(filtered));
+          }
+        }
+      } catch (err) {
+        console.warn('Error updating local hotel caches:', err);
+      }
     }
+
+    // 2. Immediate in-memory state update
+    setHotels(prev => prev.filter(h => {
+      const hId = String(h.id || h.hotelId || '');
+      const hPhone = String(h.mobile || h.phone || '').replace(/\D/g, '').slice(-10);
+      const hName = String(h.name || (h as any).hotelName || '').trim().toLowerCase();
+      if (hId === idStr || hId === targetHotelId || (target && hId === String(target.id))) return false;
+      if (cleanPhone && hPhone === cleanPhone) return false;
+      if (cleanName && hName === cleanName) return false;
+      return true;
+    }));
+
+    if (selectedHotel && (
+      String(selectedHotel.id) === idStr || 
+      String(selectedHotel.hotelId || '') === idStr ||
+      (targetHotelId && String(selectedHotel.hotelId || '') === targetHotelId) ||
+      (target && String(selectedHotel.id) === String(target.id)) ||
+      (cleanPhone && String(selectedHotel.mobile || selectedHotel.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone)
+    )) {
+      setSelectedHotel(null);
+    }
+
+    // 3. Persistent Firestore Deletion across all document IDs & queries
     try {
       await deleteRecord('hotels', hotelId);
-      if (target) {
-        if (target.id && String(target.id) !== String(hotelId)) {
-          await deleteRecord('hotels', target.id);
-        }
-        if (target.hotelId && String(target.hotelId) !== String(hotelId)) {
-          await deleteRecord('hotels', target.hotelId);
-        }
+      if (target?.id && String(target.id) !== idStr) {
+        await deleteRecord('hotels', target.id);
       }
+      if (targetHotelId && targetHotelId !== idStr) {
+        await deleteRecord('hotels', targetHotelId);
+      }
+      if (cleanPhone) {
+        await deleteRecord('hotels', cleanPhone);
+      }
+      if (cleanName) {
+        await deleteRecord('hotels', cleanName);
+      }
+      await hotelService.delete(hotelId);
+      if (target?.id) await hotelService.delete(target.id);
+      if (targetHotelId) await hotelService.delete(targetHotelId);
     } catch (e) {
       console.warn('Could not delete hotel from firestore:', e);
+    }
+  };
+
+  const deleteAllHotels = async () => {
+    const allCurrent = [...hotels];
+    setHotels([]);
+    setSelectedHotel(null);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('farmerbox_hotels');
+        localStorage.removeItem('farmerbox_mobile_hotels');
+        const deletedArr: string[] = allCurrent.flatMap(h => {
+          const ph = String(h.mobile || h.phone || '').replace(/\D/g, '').slice(-10);
+          const id = String(h.id || '');
+          const hid = String(h.hotelId || '');
+          const nm = String(h.name || (h as any).hotelName || '').trim().toLowerCase();
+          const pnm = ph && nm ? `${nm}_${ph}` : '';
+          return [id, hid, ph, nm, pnm].filter(Boolean);
+        });
+        localStorage.setItem('farmerbox_deleted_hotel_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+      } catch {}
+    }
+
+    try {
+      for (const h of allCurrent) {
+        const idStr = String(h.id);
+        const cleanPhone = String(h.mobile || h.phone || '').replace(/\D/g, '').slice(-10);
+        deleteRecord('hotels', idStr).catch(() => {});
+        if (h.hotelId) deleteRecord('hotels', String(h.hotelId)).catch(() => {});
+        if (cleanPhone) deleteRecord('hotels', cleanPhone).catch(() => {});
+        if (h.name) deleteRecord('hotels', h.name).catch(() => {});
+        hotelService.delete(idStr).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Could not delete all hotels from firestore:', e);
     }
   };
 
@@ -1312,15 +1883,118 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteDriver = async (driverId: number | string) => {
-    setDrivers(prev => prev.filter(d => String(d.id) !== String(driverId)));
-    if (selectedDriver && String(selectedDriver.id) === String(driverId)) {
-      const remaining = drivers.filter(d => String(d.id) !== String(driverId));
+    const idStr = String(driverId).trim();
+    const target = drivers.find(d => 
+      String(d.id) === idStr || 
+      (d.mobile && String(d.mobile).replace(/\D/g, '').slice(-10) === idStr.replace(/\D/g, '').slice(-10)) ||
+      (d.phone && String(d.phone).replace(/\D/g, '').slice(-10) === idStr.replace(/\D/g, '').slice(-10)) ||
+      (d.name && d.name.toLowerCase() === idStr.toLowerCase())
+    );
+
+    const cleanPhone = target ? String(target.mobile || target.phone || '').replace(/\D/g, '').slice(-10) : (idStr.replace(/\D/g, '').length >= 10 ? idStr.replace(/\D/g, '').slice(-10) : '');
+    const cleanName = target ? String(target.name || '').trim().toLowerCase() : '';
+    const vehicleNo = target ? String(target.vehicleNo || target.vehicleNumber || '').trim().toUpperCase() : '';
+
+    // Save to persistent blacklist in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedRaw = localStorage.getItem('farmerbox_deleted_driver_ids') || '[]';
+        const deletedArr: string[] = JSON.parse(deletedRaw);
+        if (idStr) deletedArr.push(idStr);
+        if (target?.id) deletedArr.push(String(target.id));
+        if (cleanPhone) deletedArr.push(cleanPhone);
+        if (cleanName) deletedArr.push(cleanName);
+        if (vehicleNo) deletedArr.push(vehicleNo);
+        localStorage.setItem('farmerbox_deleted_driver_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+
+        // Purge from farmerbox_drivers
+        const stored = localStorage.getItem('farmerbox_drivers');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            const rem = parsed.filter((d: any) => 
+              String(d.id || '') !== idStr &&
+              (!target || String(d.id || '') !== String(target.id)) &&
+              (!cleanPhone || String(d.mobile || d.phone || '').replace(/\D/g, '').slice(-10) !== cleanPhone) &&
+              (!cleanName || String(d.name || '').trim().toLowerCase() !== cleanName)
+            );
+            localStorage.setItem('farmerbox_drivers', JSON.stringify(rem));
+          }
+        }
+      } catch {}
+    }
+
+    // 1. Immediate in-memory state update
+    setDrivers(prev => prev.filter(d => 
+      String(d.id) !== idStr && 
+      (!target || String(d.id) !== String(target.id)) &&
+      (!cleanPhone || String(d.mobile || d.phone || '').replace(/\D/g, '').slice(-10) !== cleanPhone) &&
+      (!cleanName || String(d.name || '').trim().toLowerCase() !== cleanName)
+    ));
+
+    if (selectedDriver && (
+      String(selectedDriver.id) === idStr || 
+      (target && String(selectedDriver.id) === String(target.id)) ||
+      (cleanPhone && String(selectedDriver.mobile || selectedDriver.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (cleanName && String(selectedDriver.name || '').trim().toLowerCase() === cleanName)
+    )) {
+      const remaining = drivers.filter(d => 
+        String(d.id) !== idStr && 
+        (!target || String(d.id) !== String(target.id)) &&
+        (!cleanPhone || String(d.mobile || d.phone || '').replace(/\D/g, '').slice(-10) !== cleanPhone)
+      );
       setSelectedDriver(remaining.length > 0 ? remaining[0] : null);
     }
+
+    // 2. Persistent Firestore Deletion
     try {
       await deleteRecord('drivers', driverId);
+      if (target?.id && String(target.id) !== idStr) {
+        await deleteRecord('drivers', target.id);
+      }
+      if (cleanPhone) {
+        await deleteRecord('drivers', cleanPhone);
+      }
+      if (target?.name) {
+        await deleteRecord('drivers', target.name);
+      }
+      if (vehicleNo) {
+        await deleteRecord('drivers', vehicleNo);
+      }
     } catch (e) {
       console.warn('Could not delete driver from firestore:', e);
+    }
+  };
+
+  const deleteAllDrivers = async () => {
+    const allCurrent = [...drivers];
+    setDrivers([]);
+    setSelectedDriver(null);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('farmerbox_drivers');
+        const deletedArr: string[] = allCurrent.flatMap(d => {
+          const ph = String(d.mobile || d.phone || '').replace(/\D/g, '').slice(-10);
+          const id = String(d.id || '');
+          const nm = String(d.name || '').trim().toLowerCase();
+          const vn = String(d.vehicleNo || d.vehicleNumber || '').trim().toUpperCase();
+          return [id, ph, nm, vn].filter(Boolean);
+        });
+        localStorage.setItem('farmerbox_deleted_driver_ids', JSON.stringify(Array.from(new Set(deletedArr))));
+      } catch {}
+    }
+
+    try {
+      for (const d of allCurrent) {
+        const idStr = String(d.id);
+        const cleanPhone = String(d.mobile || d.phone || '').replace(/\D/g, '').slice(-10);
+        deleteRecord('drivers', idStr).catch(() => {});
+        if (cleanPhone) deleteRecord('drivers', cleanPhone).catch(() => {});
+        if (d.name) deleteRecord('drivers', d.name).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Could not delete all drivers from firestore:', e);
     }
   };
 
@@ -1406,62 +2080,153 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addOrder = async (orderData: Partial<Order>) => {
-    const newOrder: Order = {
-      id: orderData.id || `FB${Math.floor(1000 + Math.random() * 9000)}`,
-      date: orderData.date || new Date().toISOString().split('T')[0],
-      time: orderData.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      hotelName: orderData.hotelName || 'New Hotel',
-      hotelImage: orderData.hotelImage || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100',
-      zone: orderData.zone || 'Kharadi',
-      joiner: orderData.joiner || 'Admin',
-      amount: orderData.amount || 0,
-      paymentMode: orderData.paymentMode || 'Online',
-      paymentStatus: orderData.paymentStatus || 'Pending',
-      driver: orderData.driver || 'Suresh Jadhav',
-      status: orderData.status || 'Pending',
-      commission: orderData.commission || 0,
-      items: orderData.items || [],
-      addedBy: 'Admin',
-      createdBy: adminProfile.name || 'Super Admin',
-      ...orderData
-    };
     try {
-      await saveRecord('orders', newOrder);
-    } catch (e) {
-      console.warn('Could not save order to firestore:', e);
+      const orderId = await orderService.add(orderData);
+      
+      addNotification({
+        title: 'New Order Created',
+        message: `Order #${orderId} created for ${orderData.hotelName || orderData.customerName || 'Customer'}`,
+        subtitle: `${orderData.hotelName || orderData.customerName || 'Customer'} • Order Added`,
+        userType: 'Admins',
+        status: 'Sent',
+        category: 'Orders',
+        iconType: 'order',
+        read: false
+      });
+    } catch (e: any) {
+      console.error('Failed to add order via orderService:', e);
     }
-    setOrders(prev => [newOrder, ...prev]);
-    addNotification({
-      title: 'New Order Created by Admin',
-      message: `Order #${newOrder.id} created by Admin for ${newOrder.hotelName}`,
-      subtitle: `${newOrder.hotelName} • Added by Admin`,
-      userType: 'Admins',
-      status: 'Sent',
-      category: 'Orders',
-      iconType: 'order',
-      read: false
-    });
   };
 
   const deleteOrder = async (orderId: string) => {
-    const target = orders.find(o => String(o.id) === String(orderId) || String(o.orderId || '') === String(orderId));
+    try {
+      await orderService.delete(orderId);
+    } catch (e) {
+      console.warn('Could not delete order from firestore:', e);
+    }
     setOrders(prev => prev.filter(o => String(o.id) !== String(orderId) && String(o.orderId || '') !== String(orderId)));
     if (selectedOrder && (String(selectedOrder.id) === String(orderId) || String(selectedOrder.orderId || '') === String(orderId))) {
       setSelectedOrder(null);
     }
-    try {
-      await deleteRecord('orders', orderId);
-      if (target) {
-        if (target.id && String(target.id) !== String(orderId)) {
-          await deleteRecord('orders', target.id);
-        }
-        if (target.orderId && String(target.orderId) !== String(orderId)) {
-          await deleteRecord('orders', target.orderId);
-        }
+  };
+
+  /**
+   * Multi-Device Simulation Tool
+   * Simulates up to 5 mobile devices from 5 different zones placing simultaneous orders into Firestore.
+   */
+  const simulateMultiMobileOrders = async (devicesCount: number = 5): Promise<string[]> => {
+    const devices = [
+      {
+        mobileLabel: 'Mobile 1 (Kharadi)',
+        zoneId: 'ZONE_001',
+        zoneName: 'Kharadi',
+        customerId: 'CUST_HOTEL_101',
+        customerName: 'Kharadi Grand Palace Hotel',
+        partnerId: 'PARTNER_001',
+        partnerName: 'Rahul Patil',
+        mobileNumber: '9822011001',
+        items: [
+          { productId: 'PROD_001', productName: 'Fresh Red Tomatoes (Grade A)', quantity: 20, unit: 'kg', price: 40, total: 800 },
+          { productId: 'PROD_002', productName: 'Farm Fresh Banana (Robusta)', quantity: 10, unit: 'kg', price: 50, total: 500 }
+        ]
+      },
+      {
+        mobileLabel: 'Mobile 2 (Wagholi)',
+        zoneId: 'ZONE_003',
+        zoneName: 'Wagholi',
+        customerId: 'CUST_HOTEL_102',
+        customerName: 'Wagholi Spice Dining & Kitchen',
+        partnerId: 'PARTNER_002',
+        partnerName: 'Amit Shinde',
+        mobileNumber: '9822022002',
+        items: [
+          { productId: 'PROD_003', productName: 'Nashik Red Onions (Dry)', quantity: 30, unit: 'kg', price: 35, total: 1050 },
+          { productId: 'PROD_004', productName: 'Fresh Alphonso Mangoes', quantity: 5, unit: 'kg', price: 120, total: 600 }
+        ]
+      },
+      {
+        mobileLabel: 'Mobile 3 (Hadapsar)',
+        zoneId: 'ZONE_004',
+        zoneName: 'Hadapsar',
+        customerId: 'CUST_HOTEL_103',
+        customerName: 'Hadapsar Green Leaf Restaurant',
+        partnerId: 'PARTNER_003',
+        partnerName: 'Suresh Jadhav',
+        mobileNumber: '9822033003',
+        items: [
+          { productId: 'PROD_005', productName: 'Fresh Green Seedless Grapes', quantity: 12, unit: 'kg', price: 80, total: 960 },
+          { productId: 'PROD_006', productName: 'Organic Green Capsicum / Shimla Mirch', quantity: 8, unit: 'kg', price: 60, total: 480 }
+        ]
+      },
+      {
+        mobileLabel: 'Mobile 4 (Viman Nagar)',
+        zoneId: 'ZONE_002',
+        zoneName: 'Viman Nagar',
+        customerId: 'CUST_HOTEL_104',
+        customerName: 'Viman Nagar Gourmet Cafe & Resto',
+        partnerId: 'PARTNER_004',
+        partnerName: 'Priya Kulkarni',
+        mobileNumber: '9822044004',
+        items: [
+          { productId: 'PROD_007', productName: 'Fresh Spinach & Farm Greens', quantity: 15, unit: 'bunch', price: 25, total: 375 },
+          { productId: 'PROD_008', productName: 'Fresh Green Coriander (Kothimbir)', quantity: 20, unit: 'bunch', price: 20, total: 400 },
+          { productId: 'PROD_009', productName: 'Tender Green Cucumbers', quantity: 10, unit: 'kg', price: 40, total: 400 }
+        ]
+      },
+      {
+        mobileLabel: 'Mobile 5 (Koregaon Park)',
+        zoneId: 'ZONE_005',
+        zoneName: 'Koregaon Park',
+        customerId: 'CUST_HOTEL_105',
+        customerName: 'Koregaon Park Olive Bistro',
+        partnerId: 'PARTNER_005',
+        partnerName: 'Vikram More',
+        mobileNumber: '9822055005',
+        items: [
+          { productId: 'PROD_010', productName: 'Fresh Exotic Broccoli Florets', quantity: 10, unit: 'kg', price: 110, total: 1100 },
+          { productId: 'PROD_011', productName: 'Hydroponic Sweet Cherry Tomatoes', quantity: 6, unit: 'kg', price: 90, total: 540 }
+        ]
       }
-    } catch (e) {
-      console.warn('Could not delete order from firestore:', e);
+    ];
+
+    const targetDevices = devices.slice(0, Math.min(devicesCount, devices.length));
+    const createdIds: string[] = [];
+
+    for (const dev of targetDevices) {
+      const subtotal = dev.items.reduce((sum, item) => sum + item.total, 0);
+      const orderId = await orderService.add({
+        customerId: dev.customerId,
+        customerName: dev.customerName,
+        hotelId: dev.customerId,
+        hotelName: dev.customerName,
+        hotelZone: dev.zoneName,
+        zone: dev.zoneName,
+        zoneId: dev.zoneId,
+        zoneName: dev.zoneName,
+        partnerId: dev.partnerId,
+        partnerName: dev.partnerName,
+        joiner: dev.partnerName,
+        joinerId: dev.partnerId,
+        mobileNumber: dev.mobileNumber,
+        orderSource: 'mobile',
+        items: dev.items,
+        subtotal,
+        deliveryCharge: 0,
+        discount: 0,
+        grandTotal: subtotal,
+        amount: subtotal,
+        totalAmount: subtotal,
+        paymentMethod: dev.zoneName === 'Kharadi' || dev.zoneName === 'Hadapsar' ? 'COD' : 'Online',
+        paymentMode: dev.zoneName === 'Kharadi' || dev.zoneName === 'Hadapsar' ? 'COD' : 'Online',
+        paymentStatus: dev.zoneName === 'Kharadi' || dev.zoneName === 'Hadapsar' ? 'pending' : 'paid',
+        status: 'Pending',
+        orderStatus: 'Pending',
+        adminApproved: false
+      });
+      createdIds.push(orderId);
     }
+
+    return createdIds;
   };
 
   const addPayment = async (paymentData: Partial<PaymentTransaction>) => {
@@ -1544,11 +2309,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         hotels,
         products,
         payments,
+        walletTransactions,
         deletePayment,
         notifications,
         isDatabaseConnected: isConnected,
         firestoreError,
         seedDatabaseToFirebase: seedFirestoreDatabase,
+        newOrderAlert,
+        dismissNewOrderAlert,
+        simulateMultiMobileOrders,
+        approveDelivery,
+        rejectDelivery,
         activeTab,
         setActiveTab,
         selectedOrder,
@@ -1604,12 +2375,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addJoiner,
         updateJoiner,
         deleteJoiner,
+        deleteAllJoiners,
         addHotel,
         updateHotel,
         deleteHotel,
+        deleteAllHotels,
         addDriver,
         updateDriver,
         deleteDriver,
+        deleteAllDrivers,
         addProduct,
         updateProduct,
         deleteProduct,

@@ -81,22 +81,6 @@ export const B2CCatalogPage: React.FC = () => {
     const cat = p.catalogType || p.targetCatalog;
     if (cat === 'B2C' || cat === 'Both') return true;
     if (cat === 'B2B') return false;
-
-    const nameLower = (p.name || '').toLowerCase();
-    const unitLower = (p.unit || '').toLowerCase();
-
-    // Wholesale sack indicators
-    if (
-      nameLower.startsWith('b2b') ||
-      unitLower.includes('bag (50') ||
-      unitLower.includes('sack') ||
-      unitLower.includes('crate (20') ||
-      unitLower.includes('crate (15')
-    ) {
-      return false;
-    }
-
-    // Default to B2C for consumer portions
     return true;
   };
 

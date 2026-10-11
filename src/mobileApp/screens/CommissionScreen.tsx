@@ -1,10 +1,39 @@
 import React from 'react';
-import { ArrowLeft, Sprout, Wallet, Clock, CheckCircle2, AlertCircle, Sparkles, Building2, Gift } from 'lucide-react';
+import {
+  ArrowLeft,
+  Wallet,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Building2,
+  Calendar,
+  Layers,
+  IndianRupee,
+  TrendingUp,
+  Receipt,
+  ShieldCheck
+} from 'lucide-react';
 import { useJoinerApp } from '../JoinerAppContext';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 
 export const CommissionScreen: React.FC = () => {
-  const { commissionBalance, commissionHistory, setCurrentScreen } = useJoinerApp();
+  const { walletState, commissionBalance, orders, setCurrentScreen } = useJoinerApp();
+
+  const availableBalance = walletState?.walletBalance ?? commissionBalance.paid ?? 0;
+  const totalEarned = walletState?.totalCommissionEarned ?? availableBalance;
+  const todayCommission = walletState?.todayCommission ?? commissionBalance.todayCommission ?? 0;
+  const monthlyCommission = walletState?.monthlyCommission ?? commissionBalance.thisMonth ?? 0;
+  const eligibleDeliveredOrders = walletState?.eligibleDeliveredOrders ?? 0;
+
+  // Pending Commission: eligible orders (> 1500) that are delivered but waiting for admin delivery approval
+  const pendingDeliveredCommission = orders.filter(o => {
+    const amt = Number(o.totalAmount ?? o.amount ?? 0);
+    const st = String(o.status || o.orderStatus || '').toLowerCase();
+    const isApproved = (o as any).adminApproved || (o as any).walletCredited || (o as any).commissionStatus === 'credited';
+    return amt > 1500 && st === 'delivered' && !isApproved;
+  }).length * 100;
+
+  const transactions = walletState?.transactions || [];
 
   return (
     <div className="flex flex-col h-full bg-slate-50 justify-between select-none">
@@ -19,152 +48,190 @@ export const CommissionScreen: React.FC = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-black text-slate-900 leading-tight">Joiner Wallet & Commission</h2>
-            <p className="text-[10px] text-slate-500 font-medium">Earn ₹100 Bonus on Hotel Orders above ₹1,500</p>
+            <h2 className="text-base font-black text-slate-900 leading-tight">My Wallet & Commission</h2>
+            <p className="text-[10px] text-slate-500 font-medium">Automatic ₹100 credited on Admin-approved orders &gt; ₹1,500</p>
           </div>
         </div>
 
-        {/* Hero Card: Total Commission & Wallet Balance */}
-        <div className="bg-gradient-to-br from-[#15803d] via-[#16a34a] to-[#15803d] rounded-3xl p-4.5 text-white shadow-md relative overflow-hidden">
+        {/* Hero Card: Available Wallet Balance */}
+        <div className="bg-gradient-to-br from-[#15803d] via-[#16a34a] to-emerald-700 rounded-3xl p-4.5 text-white shadow-md relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md shadow-inner">
                 <Wallet className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-[11px] text-emerald-100 font-semibold uppercase tracking-wider">Wallet Balance (Credited)</p>
+                <p className="text-[11px] text-emerald-100 font-semibold uppercase tracking-wider">
+                  Available Wallet Balance
+                </p>
                 <h2 className="text-3xl font-black tracking-tight leading-none mt-0.5">
-                  ₹{commissionBalance.paid.toLocaleString('en-IN')}
+                  ₹{availableBalance.toLocaleString('en-IN')}
                 </h2>
               </div>
             </div>
 
             <div className="text-right">
               <span className="text-[10px] bg-emerald-950/60 text-emerald-200 px-2.5 py-1 rounded-full font-extrabold inline-flex items-center gap-1 border border-emerald-400/30">
-                <Sparkles className="w-3 h-3 text-yellow-300" /> ₹100 / Order
+                <CheckCircle2 className="w-3 h-3 text-emerald-300" /> ₹100 / Eligible Order
               </span>
-              <p className="text-[9.5px] text-emerald-100 font-medium mt-1.5">Approved by Admin</p>
+              <p className="text-[9.5px] text-emerald-100 font-medium mt-1.5">Asia/Kolkata IST Verified</p>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-emerald-400/30 flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5 text-emerald-100">
-              <span>Delivered & Credited:</span>
-              <span className="font-extrabold text-white">₹{commissionBalance.paid.toLocaleString('en-IN')}</span>
+              <span>Total Commission Earned:</span>
+              <span className="font-extrabold text-white">₹{totalEarned.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex items-center gap-1.5 text-emerald-100">
-              <span>Awaiting Delivery:</span>
-              <span className="font-extrabold text-yellow-300">₹{commissionBalance.pending.toLocaleString('en-IN')}</span>
+              <span>Delivered Eligible Orders:</span>
+              <span className="font-extrabold text-white">{eligibleDeliveredOrders}</span>
             </div>
           </div>
         </div>
 
-        {/* 100 Rs Reward Rule Banner */}
+        {/* 4 Summary Stat Cards */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Today's Commission Card */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today's Commission</span>
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <Calendar className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <h4 className="text-lg font-black text-slate-900 leading-tight">
+              ₹{todayCommission.toLocaleString('en-IN')}
+            </h4>
+            <p className="text-[9.5px] text-emerald-600 font-medium">Credited today in IST</p>
+          </div>
+
+          {/* Monthly Commission Card */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Commission</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <h4 className="text-lg font-black text-slate-900 leading-tight">
+              ₹{monthlyCommission.toLocaleString('en-IN')}
+            </h4>
+            <p className="text-[9.5px] text-blue-600 font-medium">Current calendar month</p>
+          </div>
+
+          {/* Eligible Delivered Orders */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivered &gt; ₹1,500</span>
+              <div className="w-6 h-6 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+                <ShieldCheck className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <h4 className="text-lg font-black text-slate-900 leading-tight">
+              {eligibleDeliveredOrders}
+            </h4>
+            <p className="text-[9.5px] text-slate-500 font-medium">Orders credited ₹100</p>
+          </div>
+
+          {/* Pending Delivery Approval */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Commission</span>
+              <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <h4 className="text-lg font-black text-amber-600 leading-tight">
+              ₹{pendingDeliveredCommission.toLocaleString('en-IN')}
+            </h4>
+            <p className="text-[9.5px] text-amber-600 font-medium">Awaiting admin verification</p>
+          </div>
+        </div>
+
+        {/* ₹100 Automatic Commission Policy Rule Card */}
         <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 shadow-2xs space-y-1.5">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
               ₹100
             </div>
-            <h4 className="font-black text-xs text-amber-950">₹100 Wallet Bonus Policy</h4>
+            <h4 className="font-black text-xs text-amber-950">Automatic ₹100 Wallet Commission Policy</h4>
           </div>
           <p className="text-[11px] text-amber-900 leading-snug">
-            Place any vegetable or fruit order <strong>above ₹1,500</strong> for your hotel partner. When the order delivery is marked <strong>Delivered & Approved by Admin</strong>, ₹100 is credited straight to your Joiner Wallet!
+            Orders with an eligible total amount <strong>strictly greater than ₹1,500</strong> earn a fixed ₹100 commission credited automatically to your wallet upon Admin delivery approval.
           </p>
-        </div>
-
-        {/* 2 Sub-Cards: Paid & Pending Approvals */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Credited to Wallet</p>
-              <h4 className="text-base font-black text-slate-900 leading-tight">
-                ₹{commissionBalance.paid.toLocaleString('en-IN')}
-              </h4>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Clock className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Pending Delivery</p>
-              <h4 className="text-base font-black text-amber-600 leading-tight">
-                ₹{commissionBalance.pending.toLocaleString('en-IN')}
-              </h4>
-            </div>
+          <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] text-center font-bold">
+            <span className="bg-amber-100/80 p-1 rounded-lg text-amber-800">₹1,500 = ₹0</span>
+            <span className="bg-emerald-100 p-1 rounded-lg text-emerald-800">₹1,501 = ₹100</span>
+            <span className="bg-emerald-100 p-1 rounded-lg text-emerald-800">₹2,000+ = ₹100</span>
           </div>
         </div>
 
-        {/* Commission & Wallet Passbook History */}
+        {/* Permanent Commission Transaction History Ledger */}
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between">
-            <h3 className="font-extrabold text-xs text-slate-900">Wallet Passbook & Order History</h3>
-            <span className="text-[10px] font-bold text-slate-400">{commissionHistory.length} Transactions</span>
+            <h3 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+              <Receipt className="w-4 h-4 text-[#15803d]" />
+              Commission Transaction Ledger
+            </h3>
+            <span className="text-[10px] font-bold text-slate-400">
+              {transactions.length} Verified Transactions
+            </span>
           </div>
 
-          {commissionHistory.length === 0 ? (
+          {transactions.length === 0 ? (
             <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-6 text-center space-y-2">
               <div className="text-3xl">🥦</div>
-              <p className="text-xs font-bold text-slate-700">No Commission Earned Yet</p>
+              <p className="text-xs font-bold text-slate-700">No Commission Transactions Yet</p>
               <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                Place hotel orders above ₹1,500 to earn ₹100 for every successfully delivered and admin-approved order.
+                Once an order above ₹1,500 is delivered and verified by Admin, a permanent ₹100 transaction record will appear here.
               </p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs divide-y divide-slate-100 text-xs overflow-hidden">
-              {commissionHistory.map((item, idx) => {
-                const isPaid = item.status === 'Paid';
-                const isPending = item.status === 'Pending Approval';
+              {transactions.map((tx, idx) => {
+                let txDate = 'Recent';
+                let txTime = '';
+                if (tx.createdAt) {
+                  try {
+                    const d = (tx.createdAt as any).toDate ? (tx.createdAt as any).toDate() : new Date(tx.createdAt);
+                    txDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                    txTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  } catch {
+                    txDate = 'Recent';
+                  }
+                }
 
                 return (
-                  <div key={idx} className="p-3.5 flex items-center justify-between gap-2.5 hover:bg-slate-50/70 transition-colors">
-                    <div className="min-w-0">
+                  <div key={tx.id || tx.transactionId || idx} className="p-3.5 flex items-center justify-between gap-2.5 hover:bg-slate-50 transition-colors">
+                    <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-black text-slate-900 text-xs truncate">
-                          {item.hotelName}
+                        <span className="font-extrabold text-slate-900 text-xs truncate">
+                          {tx.hotelName || 'Partner Hotel'}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono font-bold">
-                          {item.orderId}
+                        <span className="text-[10px] text-slate-400 font-mono font-semibold">
+                          #{tx.orderId}
                         </span>
                       </div>
-                      
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 font-medium">
-                        <span>{item.date}</span>
+
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                        <span>{txDate} {txTime && `• ${txTime}`}</span>
                         <span>•</span>
-                        <span>Order Total: <strong className="text-slate-800">₹{(item.orderAmount || 0).toLocaleString('en-IN')}</strong></span>
+                        <span>Order: <strong className="text-slate-800">₹{(tx.orderAmount || 0).toLocaleString('en-IN')}</strong></span>
                       </div>
+
+                      <p className="text-[9.5px] font-mono text-slate-400 truncate max-w-[200px]">
+                        TX: {tx.transactionId}
+                      </p>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <div className="flex items-center justify-end gap-1 font-black text-xs text-slate-900">
-                        {item.isBonusEligible ? (
-                          <span className={isPaid ? 'text-emerald-700' : 'text-amber-600'}>
-                            +₹{item.amount}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">₹0</span>
-                        )}
+                      <div className="font-black text-sm text-[#15803d]">
+                        +₹{Number(tx.commissionAmount ?? tx.amount ?? 100).toLocaleString('en-IN')}
                       </div>
-
-                      <div className="mt-1">
-                        {isPaid ? (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-0.5">
-                            <CheckCircle2 className="w-2.5 h-2.5" /> Credited
-                          </span>
-                        ) : isPending ? (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-0.5">
-                            <Clock className="w-2.5 h-2.5" /> Awaiting Delivery
-                          </span>
-                        ) : (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-500">
-                            Under ₹1,500
-                          </span>
-                        )}
-                      </div>
+                      <span className="inline-flex items-center gap-0.5 text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Credited
+                      </span>
                     </div>
                   </div>
                 );

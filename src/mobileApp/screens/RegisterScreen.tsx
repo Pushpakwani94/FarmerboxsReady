@@ -1,105 +1,14 @@
-import React, { useState } from 'react';
-import {
-  ArrowLeft,
-  User,
-  Smartphone,
-  Mail,
-  MapPin,
-  Lock,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  AlertCircle,
-  Gift
-} from 'lucide-react';
+import React from 'react';
+import { ArrowLeft, ShieldCheck, UserCheck, Key, LogIn, PhoneCall, HelpCircle } from 'lucide-react';
 import { useJoinerApp } from '../JoinerAppContext';
 
 export const RegisterScreen: React.FC = () => {
-  const { setCurrentScreen, registerUser } = useJoinerApp();
-
-  const [name, setName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [email, setEmail] = useState('');
-  const [zone, setZone] = useState('Kharadi');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
-  const [agreeTerms, setAgreeTerms] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  const zonesList = [
-    'Kharadi',
-    'Viman Nagar',
-    'Hinjawadi',
-    'Magarpatta',
-    'Hadapsar',
-    'Baner',
-    'Wakad',
-    'Aundh',
-    'Shivajinagar',
-    'Undri',
-    'Kothrud',
-    'Pimpri Chinchwad'
-  ];
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    if (!name || !mobile || !email || !zone || !password) {
-      setErrorMessage('Please fill in all required fields.');
-      return;
-    }
-
-    const cleanMobile = mobile.replace(/[^0-9]/g, '');
-    if (cleanMobile.length !== 10) {
-      setErrorMessage('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.');
-      return;
-    }
-
-    if (!agreeTerms) {
-      setErrorMessage('Please accept the Terms & Conditions.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await registerUser({
-        name: name.trim(),
-        phone: cleanMobile,
-        email: email.trim(),
-        zone,
-        password
-      });
-      setIsLoading(false);
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setCurrentScreen('DASHBOARD');
-      }, 1200);
-    } catch (err: any) {
-      setIsLoading(false);
-      setErrorMessage(err.message || 'Registration failed. Please try again.');
-    }
-  };
+  const { setCurrentScreen } = useJoinerApp();
 
   return (
-    <div className="flex flex-col h-full bg-white select-none">
+    <div className="flex flex-col h-full bg-slate-50 select-none">
       {/* Top Header */}
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white px-4 py-3.5 border-b border-slate-100 flex items-center justify-between shadow-2xs">
         <button
           onClick={() => setCurrentScreen('LOGIN')}
           className="p-1 -ml-1 text-slate-700 hover:text-slate-900 cursor-pointer"
@@ -111,222 +20,90 @@ export const RegisterScreen: React.FC = () => {
             src="/images/farmerbox_brand_logo.png"
             alt="FarmerBox"
             className="w-6 h-6 object-contain rounded-md"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/farmerbox_partner_logo.png';
+            }}
           />
-          <span className="font-black text-sm text-[#0D472B] tracking-tight">FarmerBox</span>
+          <span className="font-black text-sm text-[#0D472B] tracking-tight">FarmerBox Partner</span>
         </div>
         <div className="w-5"></div>
       </div>
 
-      {/* Form Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-        {isSuccess ? (
-          <div className="py-16 text-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-              <CheckCircle2 className="w-10 h-10" />
+      {/* Main Content */}
+      <div className="flex-1 p-5 flex flex-col justify-between overflow-y-auto">
+        <div className="space-y-4 pt-2">
+          {/* Hero Card */}
+          <div className="bg-white rounded-2xl p-5 border border-rose-100 shadow-xs text-center">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center mb-3 border border-rose-200">
+              <ShieldCheck className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-black text-slate-900">Registration Successful!</h3>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto">
-              Your account has been created successfully. Loading dashboard...
+            <h3 className="font-black text-slate-800 text-lg">Self-Registration Closed</h3>
+            <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+              Public registration for <strong>Hotel Joiners</strong> is not available. Accounts are strictly registered, assigned to zones, and activated by <strong>FarmerBox Administration</strong>.
             </p>
           </div>
-        ) : (
-          <>
-            {/* Headline */}
-            <div className="space-y-1 text-center">
-              <h2 className="text-2xl font-black text-slate-900">
-                Create Account
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Register as a Hotel Joiner
+
+          {/* How to Get Access */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <UserCheck className="w-4 h-4 text-emerald-600" />
+              <span>How to Get Access:</span>
+            </h4>
+
+            <div className="space-y-2.5 text-xs text-slate-600">
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-emerald-200">
+                  1
+                </span>
+                <p className="text-[11.5px] leading-snug">
+                  Contact FarmerBox Admin via email or support phone to request partner onboarding.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-emerald-200">
+                  2
+                </span>
+                <p className="text-[11.5px] leading-snug">
+                  Admin adds your profile, registers your mobile number, and assigns your active operational Zone.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-emerald-200">
+                  3
+                </span>
+                <p className="text-[11.5px] leading-snug">
+                  Log in directly on the Login screen using your registered 10-digit mobile number and password.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Support Contact Box */}
+          <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200 flex items-start gap-2.5">
+            <PhoneCall className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-emerald-900">
+                FarmerBox Support & Admin Contact:
+              </p>
+              <p className="text-[11px] text-emerald-800 font-mono mt-0.5">
+                📞 +91 98765 43210 &nbsp;|&nbsp; ✉️ admin@farmerbox.in
               </p>
             </div>
+          </div>
+        </div>
 
-            {/* Error Notification Banner */}
-            {errorMessage && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <span className="font-medium leading-tight">{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Registration Form */}
-            <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
-              {/* Full Name */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Full Name <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    placeholder="Enter your full name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Mobile Number */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Mobile Number <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex border border-slate-200 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-emerald-600">
-                  <span className="px-3 py-2.5 bg-slate-50 text-slate-500 font-semibold border-r border-slate-200 text-xs flex items-center gap-1">
-                    <Smartphone className="w-3.5 h-3.5 text-slate-400" /> +91
-                  </span>
-                  <input
-                    type="tel"
-                    placeholder="Mobile number"
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
-                    maxLength={10}
-                    required
-                    className="flex-1 px-3 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Email Address */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Email Address <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Operating Zone */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Operating Zone <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <select
-                    value={zone}
-                    onChange={(e) => setZone(e.target.value)}
-                    required
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white focus:outline-emerald-600"
-                  >
-                    {zonesList.map(z => (
-                      <option key={z} value={z}>{z} Zone</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Password & Confirm */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Password <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="w-full pl-3 pr-8 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-3 text-slate-400 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Confirm <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Confirm"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Referral Code */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Referral Code <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Gift className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    placeholder="Referral code"
-                    value={referralCode}
-                    onChange={(e) => setReferralCode(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-emerald-600 uppercase"
-                  />
-                </div>
-              </div>
-
-              {/* Terms Checkbox */}
-              <div className="pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-600 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={agreeTerms}
-                    onChange={(e) => setAgreeTerms(e.target.checked)}
-                    required
-                    className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <span>
-                    I agree to the <strong className="text-[#15803d]">Terms & Conditions</strong>
-                  </span>
-                </label>
-              </div>
-
-              {/* Submit Button */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3.5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {isLoading ? 'Creating Account...' : 'Register'}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-      </div>
-
-      {/* Bottom Switcher */}
-      <div className="p-4 border-t border-slate-100 text-center text-xs">
-        <p className="text-slate-600 font-medium">
-          Already registered?{' '}
+        {/* Back to Login Button */}
+        <div className="pt-4">
           <button
             onClick={() => setCurrentScreen('LOGIN')}
-            className="font-extrabold text-[#15803d] hover:underline cursor-pointer"
+            className="w-full py-3.5 bg-[#15803D] hover:bg-[#166534] active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
           >
-            Login
+            <LogIn className="w-4 h-4" />
+            <span>Go to Login</span>
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );

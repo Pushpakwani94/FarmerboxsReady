@@ -42,7 +42,7 @@ import { JoinerCommissionHistoryModal } from '../components/Modals/JoinerCommiss
 import { EditCommissionModal } from '../components/Modals/EditCommissionModal';
 
 export const CommissionPage: React.FC = () => {
-  const { joiners, orders, payments, isDatabaseConnected, updateJoiner } = useApp();
+  const { joiners, orders, payments, isDatabaseConnected, updateJoiner, deleteJoiner, confirmAction } = useApp();
 
   // Dynamically compute commission list from live Firestore / state data
   const dynamicCommissionList = useMemo<JoinerCommissionRecord[]>(() => {
@@ -425,6 +425,45 @@ export const CommissionPage: React.FC = () => {
     showToast(`Successfully processed payouts for ${selectedIds.length} joiners!`);
   };
 
+  // Delete single joiner & commission record
+  const handleDeleteJoiner = (joinerId: number | string, joinerName: string) => {
+    confirmAction({
+      title: 'Delete Joiner & Commission Record',
+      message: `Are you sure you want to permanently delete "${joinerName}"? This will delete their partner profile, wallet balance, and commission records from Firebase Firestore. This action cannot be undone.`,
+      confirmLabel: 'Delete Joiner',
+      type: 'danger',
+      onConfirm: async () => {
+        await deleteJoiner(joinerId);
+        setCommissionList(prev => prev.filter(j => String(j.id) !== String(joinerId)));
+        setSelectedIds(prev => prev.filter(id => String(id) !== String(joinerId)));
+        if (String(selectedJoinerId) === String(joinerId)) {
+          const remaining = commissionList.filter(j => String(j.id) !== String(joinerId));
+          setSelectedJoinerId(remaining.length > 0 ? remaining[0].id : 1);
+        }
+        showToast(`Joiner "${joinerName}" and their commission records were permanently deleted.`);
+      }
+    });
+  };
+
+  // Bulk Delete joiners
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    confirmAction({
+      title: `Delete ${selectedIds.length} Selected Joiners`,
+      message: `Are you sure you want to permanently delete all ${selectedIds.length} selected joiners and their wallet records from Firebase Firestore? This action is irreversible.`,
+      confirmLabel: `Delete (${selectedIds.length}) Joiners`,
+      type: 'danger',
+      onConfirm: async () => {
+        for (const id of selectedIds) {
+          await deleteJoiner(id);
+        }
+        setCommissionList(prev => prev.filter(j => !selectedIds.some(sid => String(sid) === String(j.id))));
+        setSelectedIds([]);
+        showToast(`${selectedIds.length} joiners and commission records deleted successfully.`);
+      }
+    });
+  };
+
   // Metrics computed dynamically
   const totalCommissionSum = commissionList.reduce((sum, j) => sum + (Number(j.commission) || 0), 0);
   const paidCommissionSum = commissionList.reduce((sum, j) => sum + (Number(j.paidAmount) || 0), 0);
@@ -618,6 +657,13 @@ export const CommissionPage: React.FC = () => {
                     Bulk Pay Commission
                   </button>
                   <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-2xs cursor-pointer flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Selected ({selectedIds.length})
+                  </button>
+                  <button
                     onClick={() => setSelectedIds([])}
                     className="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg cursor-pointer"
                   >
@@ -739,7 +785,7 @@ export const CommissionPage: React.FC = () => {
                                   setPayoutTargetJoiner(j);
                                   setIsPayoutModalOpen(true);
                                 }}
-                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg cursor-pointer"
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg cursor-pointer transition-colors shadow-2xs"
                               >
                                 Pay
                               </button>
@@ -748,10 +794,17 @@ export const CommissionPage: React.FC = () => {
                                   setSelectedJoinerId(j.id);
                                   setIsHistoryModalOpen(true);
                                 }}
-                                className="p-1 text-slate-500 hover:text-blue-600 rounded hover:bg-slate-100 cursor-pointer"
-                                title="Ledger"
+                                className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors"
+                                title="Commission Ledger"
                               >
                                 <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteJoiner(j.id, j.name)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                                title="Delete Joiner & Commission Records"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
@@ -858,7 +911,7 @@ export const CommissionPage: React.FC = () => {
                         setPayoutTargetJoiner(j);
                         setIsPayoutModalOpen(true);
                       }}
-                      className="flex-1 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg shadow-2xs cursor-pointer"
+                      className="flex-1 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg shadow-2xs cursor-pointer transition-colors"
                     >
                       Payout
                     </button>
@@ -868,9 +921,19 @@ export const CommissionPage: React.FC = () => {
                         setSelectedJoinerId(j.id);
                         setIsHistoryModalOpen(true);
                       }}
-                      className="py-1 px-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[11px] rounded-lg cursor-pointer"
+                      className="py-1 px-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[11px] rounded-lg cursor-pointer transition-colors"
                     >
                       Ledger
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteJoiner(j.id, j.name);
+                      }}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                      title="Delete Joiner"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

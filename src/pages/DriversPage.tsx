@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp, deduplicateDrivers } from '../context/AppContext';
 import {
   Truck,
   UserCheck,
@@ -44,7 +44,9 @@ const ZONE_MAP_COORDS: Record<string, { cx: number; cy: number; color: string; p
 };
 
 export const DriversPage: React.FC = () => {
-  const { drivers, zones, orders, deleteDriver, updateDriver, confirmAction } = useApp();
+  const { drivers, zones, orders, deleteDriver, deleteAllDrivers, updateDriver, confirmAction } = useApp();
+
+  const uniqueDrivers = useMemo(() => deduplicateDrivers(drivers), [drivers]);
 
   // Filter & Search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,7 +68,7 @@ export const DriversPage: React.FC = () => {
   const [hoveredMapPin, setHoveredMapPin] = useState<string | null>(null);
 
   // Filter drivers
-  const filteredDrivers = drivers.filter(d => {
+  const filteredDrivers = uniqueDrivers.filter(d => {
     const term = searchTerm.toLowerCase().trim();
     const name = (d.name || '').toLowerCase();
     const mobile = String(d.mobile || '');
@@ -98,14 +100,14 @@ export const DriversPage: React.FC = () => {
   const paginatedDrivers = filteredDrivers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const activeDriverItem: Driver | null =
-    selectedDriverState && drivers.some(d => String(d.id) === String(selectedDriverState.id))
+    selectedDriverState && uniqueDrivers.some(d => String(d.id) === String(selectedDriverState.id))
       ? selectedDriverState
-      : filteredDrivers[0] || drivers[0] || null;
+      : filteredDrivers[0] || uniqueDrivers[0] || null;
 
   // Dynamic counts
-  const activeDriversCount = drivers.filter(d => (d.status || 'Active') === 'Active').length;
-  const onLeaveCount = drivers.filter(d => d.status === 'On Leave').length;
-  const inactiveDriversCount = drivers.filter(d => d.status === 'Inactive').length;
+  const activeDriversCount = uniqueDrivers.filter(d => (d.status || 'Active') === 'Active').length;
+  const onLeaveCount = uniqueDrivers.filter(d => d.status === 'On Leave').length;
+  const inactiveDriversCount = uniqueDrivers.filter(d => d.status === 'Inactive').length;
   const totalInactive = inactiveDriversCount + onLeaveCount;
 
   const liveDeliveredOrders = orders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
@@ -182,7 +184,7 @@ export const DriversPage: React.FC = () => {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-slate-500">Total Drivers</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{drivers.length}</h3>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">{uniqueDrivers.length}</h3>
           </div>
         </div>
 
@@ -289,6 +291,27 @@ export const DriversPage: React.FC = () => {
               <option value="Inactive">Inactive</option>
             </select>
 
+            {uniqueDrivers.length > 0 && (
+              <button
+                onClick={() => {
+                  confirmAction({
+                    title: 'Delete All Drivers',
+                    message: 'Are you sure you want to permanently delete all drivers? All vehicle details and driver assignments will be removed.',
+                    entityName: `${uniqueDrivers.length} Drivers`,
+                    confirmLabel: 'Delete All',
+                    type: 'danger',
+                    onConfirm: () => {
+                      deleteAllDrivers();
+                    }
+                  });
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
+                title="Delete all drivers permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete All
+              </button>
+            )}
+
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-2xs whitespace-nowrap"
@@ -299,7 +322,27 @@ export const DriversPage: React.FC = () => {
         </div>
 
         {/* Table View */}
-        {filteredDrivers.length === 0 ? (
+        {uniqueDrivers.length === 0 ? (
+          <div className="text-center py-12 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+              <Truck className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800 text-sm">No Delivery Drivers Found</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                Add your field delivery fleet to assign incoming hotel orders, monitor vehicle routes, and complete deliveries.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add First Driver
+              </button>
+            </div>
+          </div>
+        ) : filteredDrivers.length === 0 ? (
           <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
             <p className="text-xs font-semibold text-slate-700">No drivers match your filter criteria.</p>
             <button

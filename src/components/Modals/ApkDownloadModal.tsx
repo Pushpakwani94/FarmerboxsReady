@@ -38,7 +38,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
   // Build the direct APK and iOS URLs using the current window origin
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const apkFileName = 'farmerbox-joiner-v2.4.1.apk';
+  const apkFileName = 'farmerbox-joiner-v2.5.0.apk';
   const iosFileName = 'farmerbox-joiner-ios.zip';
   const directApkUrl = `${origin}/${apkFileName}`;
   const directIosUrl = `${origin}/${iosFileName}`;
@@ -84,14 +84,14 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
 
   const handleShareWhatsApp = () => {
     const text = encodeURIComponent(
-      `🌱 *FarmerBox Joiner App (v2.4.1)*\n\nDownload the mobile app for hotel vegetable orders & ₹100 commission!\n\n🤖 Android APK:\n${directApkUrl}\n\n🍎 iOS Xcode Package:\n${directIosUrl}`
+      `🌱 *FarmerBox Joiner App (v2.5.0)*\n\nDownload the mobile app for hotel vegetable orders & ₹100 commission!\n\n🤖 Android APK:\n${directApkUrl}\n\n🍎 iOS Xcode Package:\n${directIosUrl}`
     );
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   };
 
   const handleShareSMS = () => {
     const text = encodeURIComponent(
-      `Download FarmerBox Joiner App v2.4.1 (Android APK: ${directApkUrl} | iOS: ${directIosUrl})`
+      `Download FarmerBox Joiner App v2.5.0 (Android APK: ${directApkUrl} | iOS: ${directIosUrl})`
     );
     window.open(`sms:?body=${text}`, '_blank');
   };

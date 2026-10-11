@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
 
         // Load local dev server with mobile joiner mode
-        webView.loadUrl("http://192.168.1.21:8080/?app=joiner");
+        webView.loadUrl("http://192.168.1.8:8080/?app=joiner");
     }
 
     @Override

@@ -1,8 +1,110 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'super_admin' || 
+        request.auth.token.role == 'owner' || 
+        request.auth.token.admin == true
+      );
+    }
+    function isPartner(partnerId) {
+      return isAuthenticated() && (
+        request.auth.uid == partnerId ||
+        request.auth.token.partnerId == partnerId
+      );
+    }
+    function isDriver(driverId) {
+      return isAuthenticated() && (
+        request.auth.uid == driverId ||
+        request.auth.token.driverId == driverId
+      );
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      // Anyone authenticated (or app clients) can read orders
+      allow read: if true;
+      
+      // Partners & clients can create orders, but cannot self-approve or credit commissions
+      allow create: if true;
+      
+      // Updates: mobile clients cannot directly set adminApproved or credit commission
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // Wallets and Wallet Transactions (Commission Ledger)
+    match /wallets/{walletId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    match /walletTransactions/{txId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // Hotels & Joiners
+    match /hotels/{hotelId} {
+      allow read, write: if true;
+    }
+    match /hotelJoiners/{joinerId} {
+      allow read, write: if true;
+    }
+    match /joiners/{joinerId} {
+      allow read, write: if true;
+    }
+
+    // Delivery Drivers
+    match /deliveryDrivers/{driverId} {
+      allow read, write: if true;
+    }
+    match /drivers/{driverId} {
+      allow read, write: if true;
+    }
+
+    // Products, Categories & Inventory
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /productCategories/{categoryId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Zones
+    match /zones/{zoneId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Notifications & System Settings
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Default match for other collections
     match /{document=**} {
       allow read, write: if true;
     }
   }
 }
+

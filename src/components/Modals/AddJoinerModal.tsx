@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users } from 'lucide-react';
+import { X, Users, Key, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const AddJoinerModal: React.FC = () => {
@@ -9,6 +9,8 @@ export const AddJoinerModal: React.FC = () => {
   const [zone, setZone] = useState('Kharadi');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('FarmerBox@123');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (zones.length > 0) {
@@ -28,18 +30,26 @@ export const AddJoinerModal: React.FC = () => {
     }
     const cleanZone = zone || (zones[0]?.name || 'Kharadi');
     const cleanEmail = email.trim() || `${name.trim().toLowerCase().replace(/\s+/g, '.')}@farmerbox.in`;
+    const cleanPassword = password.trim() || 'FarmerBox@123';
 
     addJoiner(
       name.trim(),
       phone.trim(),
       cleanZone,
       cleanEmail,
-      'Active'
+      'Active',
+      cleanPassword
     );
     setIsAddJoinerOpen(false);
     setName('');
     setPhone('');
     setEmail('');
+    setPassword('FarmerBox@123');
+  };
+
+  const handleGeneratePassword = () => {
+    const randomPass = `FB@${Math.floor(1000 + Math.random() * 9000)}`;
+    setPassword(randomPass);
   };
 
   return (
@@ -52,7 +62,7 @@ export const AddJoinerModal: React.FC = () => {
             </div>
             <div>
               <h3 className="font-bold text-lg text-slate-800">Add New Joiner</h3>
-              <p className="text-xs text-slate-500">Onboard a new field joiner to drive hotel signups</p>
+              <p className="text-xs text-slate-500">Onboard a new field joiner & generate mobile app login</p>
             </div>
           </div>
           <button
@@ -91,7 +101,7 @@ export const AddJoinerModal: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Phone Number *</label>
+              <label className="block font-semibold text-slate-700 mb-1">Phone Number (Login ID) *</label>
               <input
                 type="text"
                 required
@@ -113,7 +123,45 @@ export const AddJoinerModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-emerald-800 font-medium">
+          {/* Dummy Password Field */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-slate-700 flex items-center gap-1">
+                <Key className="w-3.5 h-3.5 text-emerald-600" />
+                <span>App Login Password *</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleGeneratePassword}
+                className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" /> Generate PIN
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="FarmerBox@123"
+                className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10.5px] text-slate-500 mt-1">
+              Default password: <span className="font-mono font-bold text-slate-700">FarmerBox@123</span> (Used by the joiner to sign in to the Hotel Joiner App).
+            </p>
+          </div>
+
+          <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100 text-emerald-800 font-medium text-[11px]">
             💡 <strong>Joiner Commission Rule:</strong> Earns ₹100 flat commission per completed order delivered to onboarded hotels.
           </div>
 

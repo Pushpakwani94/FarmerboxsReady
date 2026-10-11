@@ -634,43 +634,73 @@ export const CustomerAppProvider: React.FC<{ children: ReactNode; initialScreen?
     };
 
     // Save to Firestore so Admin Panel receives it in real-time!
+    const adminOrderPayload: any = {
+      id: newOrder.id,
+      orderId: newOrder.id,
+      hotelName: `${user.name} (B2C Customer)`,
+      hotelId: 'cust_b2c',
+      hotelImage: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=100',
+      joiner: 'FarmerBox Direct B2C',
+      joinerName: 'FarmerBox Direct B2C',
+      zone: newOrder.deliveryAddress?.area || 'Baner',
+      hotelZone: newOrder.deliveryAddress?.area || 'Baner',
+      amount: newOrder.totalAmount,
+      totalAmount: newOrder.totalAmount,
+      subtotal: newOrder.totalAmount,
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      orderDate: 'Today',
+      deliveryDate: 'Today',
+      itemsCount: cartItemCount,
+      status: 'Confirmed',
+      orderStatus: 'Confirmed',
+      paymentStatus: selectedPaymentMethod === 'COD' ? 'Pending' : 'Paid',
+      paymentMode: selectedPaymentMethod,
+      driver: 'Not Assigned',
+      commission: 100,
+      walletCredited: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: cart.map(item => ({
+        id: item.productId,
+        productId: item.productId,
+        productName: item.name,
+        name: item.name,
+        qty: item.quantity,
+        quantity: item.quantity,
+        unit: item.unit,
+        price: item.price,
+        total: item.price * item.quantity
+      }))
+    };
+
     try {
-      const adminOrderPayload = {
-        id: newOrder.id,
-        orderId: newOrder.id,
-        hotelName: `${user.name} (B2C Customer)`,
-        hotelId: 'cust_b2c',
-        joiner: 'FarmerBox Direct B2C',
-        joinerName: 'FarmerBox Direct B2C',
-        zone: newOrder.deliveryAddress?.area || 'Baner',
-        amount: newOrder.totalAmount,
-        totalAmount: newOrder.totalAmount,
-        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        orderDate: 'Today',
-        deliveryDate: 'Today',
-        itemsCount: cartItemCount,
-        status: 'Pending',
-        orderStatus: 'Pending',
-        paymentStatus: selectedPaymentMethod === 'COD' ? 'Pending' : 'Paid',
-        paymentMode: selectedPaymentMethod,
-        driver: 'Assigned upon dispatch',
-        commission: 100,
-        walletCredited: false,
-        items: cart.map(item => ({
-          id: item.productId,
-          productName: item.name,
-          name: item.name,
-          qty: item.quantity,
-          quantity: item.quantity,
-          unit: item.unit,
-          price: item.price,
-          total: item.price * item.quantity
-        }))
-      };
       await saveRecord('orders', adminOrderPayload, newOrder.id);
     } catch (e) {
       console.warn('Firestore order sync:', e);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const storedAdminOrders = localStorage.getItem('farmerbox_orders');
+        const parsedAdmin = storedAdminOrders ? JSON.parse(storedAdminOrders) : [];
+        const mergedAdmin = [adminOrderPayload, ...parsedAdmin.filter((o: any) => String(o.id || o.orderId) !== String(newOrder.id))];
+        localStorage.setItem('farmerbox_orders', JSON.stringify(mergedAdmin));
+
+        const storedMobOrders = localStorage.getItem('farmerbox_mobile_orders');
+        const parsedMob = storedMobOrders ? JSON.parse(storedMobOrders) : [];
+        const mergedMob = [adminOrderPayload, ...parsedMob.filter((o: any) => String(o.id || o.orderId) !== String(newOrder.id))];
+        localStorage.setItem('farmerbox_mobile_orders', JSON.stringify(mergedMob));
+      } catch (e) {}
+
+      window.dispatchEvent(new CustomEvent('farmerbox_order_created', { detail: adminOrderPayload }));
+      if ('BroadcastChannel' in window) {
+        try {
+          const syncChan = new BroadcastChannel('farmerbox_sync');
+          syncChan.postMessage({ type: 'ORDER_CREATED', order: adminOrderPayload });
+          syncChan.close();
+        } catch (e) {}
+      }
     }
 
     // Save locally
