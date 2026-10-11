@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateJoiners } from '../context/AppContext';
+import { calculateCommission } from '../utils/commission';
 import {
   Users,
   UserCheck,
@@ -142,12 +143,17 @@ export const JoinersPage: React.FC = () => {
 
     const ordersCount = liveOrders.length;
     
-    // Dynamic Commission Calculation: ₹100 per order or specific commissionAmount
+    // Dynamic Commission Calculation using multi-slab calculation
     let totalEarnings = 0;
     let paidAmount = 0;
 
     liveOrders.forEach(o => {
-      const comm = Number((o as any).commissionAmount || (o as any).commission || 100);
+      const orderAmt = Number(o.totalAmount || (o as any).amount || 0);
+      const comm = (o as any).commissionAmount !== undefined && (o as any).commissionAmount !== null
+        ? Number((o as any).commissionAmount)
+        : ((o as any).commission !== undefined && (o as any).commission !== null
+          ? Number((o as any).commission)
+          : calculateCommission(orderAmt));
       const isDelivered = String(o.status || '').toLowerCase() === 'delivered' || (o as any).adminApproved;
       totalEarnings += comm;
       if (isDelivered || (o as any).commissionStatus === 'credited' || (o as any).adminApproved) {

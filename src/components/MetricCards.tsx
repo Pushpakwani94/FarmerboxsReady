@@ -10,6 +10,7 @@ import {
   Coins
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { calculateCommission } from '../utils/commission';
 
 export const MetricCards: React.FC = () => {
   const { setActiveTab, hotels, joiners, zones, orders, isDatabaseConnected } = useApp();
@@ -23,11 +24,10 @@ export const MetricCards: React.FC = () => {
   
   const deliveredCommissionOrders = orders.filter(o => (o.status === 'Delivered' || o.orderStatus === 'Delivered'));
   const totalCommission = deliveredCommissionOrders.reduce((sum, o) => {
-    const comm = Number(o.commission || 0);
+    const comm = Number((o as any).commissionAmount ?? o.commission ?? 0);
     if (comm > 0) return sum + comm;
-    const amt = Number(o.amount || o.totalAmount || 0);
-    if (amt >= 1500 || (o as any).isBonusEligible) return sum + 100;
-    return sum + 100;
+    const amt = Number(o.totalAmount || o.amount || 0);
+    return sum + calculateCommission(amt);
   }, 0);
 
   const cards = [

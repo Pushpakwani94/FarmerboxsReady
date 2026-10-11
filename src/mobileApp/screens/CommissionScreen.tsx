@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useJoinerApp } from '../JoinerAppContext';
 import { MobileBottomNav } from '../components/MobileBottomNav';
+import { calculateCommission, COMMISSION_SLABS } from '../../utils/commission';
 
 export const CommissionScreen: React.FC = () => {
   const { walletState, commissionBalance, orders, setCurrentScreen } = useJoinerApp();
@@ -25,13 +26,15 @@ export const CommissionScreen: React.FC = () => {
   const monthlyCommission = walletState?.monthlyCommission ?? commissionBalance.thisMonth ?? 0;
   const eligibleDeliveredOrders = walletState?.eligibleDeliveredOrders ?? 0;
 
-  // Pending Commission: eligible orders (> 1500) that are delivered but waiting for admin delivery approval
+  // Pending Commission: orders that are delivered but waiting for admin delivery verification
   const pendingDeliveredCommission = orders.filter(o => {
-    const amt = Number(o.totalAmount ?? o.amount ?? 0);
     const st = String(o.status || o.orderStatus || '').toLowerCase();
     const isApproved = (o as any).adminApproved || (o as any).walletCredited || (o as any).commissionStatus === 'credited';
-    return amt > 1500 && st === 'delivered' && !isApproved;
-  }).length * 100;
+    return st === 'delivered' && !isApproved;
+  }).reduce((sum, o) => {
+    const amt = Number(o.totalAmount ?? o.amount ?? 0);
+    return sum + calculateCommission(amt);
+  }, 0);
 
   const transactions = walletState?.transactions || [];
 
@@ -49,7 +52,7 @@ export const CommissionScreen: React.FC = () => {
           </button>
           <div>
             <h2 className="text-base font-black text-slate-900 leading-tight">My Wallet & Commission</h2>
-            <p className="text-[10px] text-slate-500 font-medium">Automatic ₹100 credited on Admin-approved orders &gt; ₹1,500</p>
+            <p className="text-[10px] text-slate-500 font-medium">Automatic ₹50 - ₹500 credited on delivered orders</p>
           </div>
         </div>
 
@@ -72,7 +75,7 @@ export const CommissionScreen: React.FC = () => {
 
             <div className="text-right">
               <span className="text-[10px] bg-emerald-950/60 text-emerald-200 px-2.5 py-1 rounded-full font-extrabold inline-flex items-center gap-1 border border-emerald-400/30">
-                <CheckCircle2 className="w-3 h-3 text-emerald-300" /> ₹100 / Eligible Order
+                <CheckCircle2 className="w-3 h-3 text-emerald-300" /> Multi-Slab System
               </span>
               <p className="text-[9.5px] text-emerald-100 font-medium mt-1.5">Asia/Kolkata IST Verified</p>
             </div>
@@ -84,7 +87,7 @@ export const CommissionScreen: React.FC = () => {
               <span className="font-extrabold text-white">₹{totalEarned.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex items-center gap-1.5 text-emerald-100">
-              <span>Delivered Eligible Orders:</span>
+              <span>Delivered Orders:</span>
               <span className="font-extrabold text-white">{eligibleDeliveredOrders}</span>
             </div>
           </div>
@@ -123,7 +126,7 @@ export const CommissionScreen: React.FC = () => {
           {/* Eligible Delivered Orders */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivered &gt; ₹1,500</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivered Orders</span>
               <div className="w-6 h-6 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
                 <ShieldCheck className="w-3.5 h-3.5" />
               </div>
@@ -131,7 +134,7 @@ export const CommissionScreen: React.FC = () => {
             <h4 className="text-lg font-black text-slate-900 leading-tight">
               {eligibleDeliveredOrders}
             </h4>
-            <p className="text-[9.5px] text-slate-500 font-medium">Orders credited ₹100</p>
+            <p className="text-[9.5px] text-slate-500 font-medium">Commission qualifying</p>
           </div>
 
           {/* Pending Delivery Approval */}
@@ -145,26 +148,40 @@ export const CommissionScreen: React.FC = () => {
             <h4 className="text-lg font-black text-amber-600 leading-tight">
               ₹{pendingDeliveredCommission.toLocaleString('en-IN')}
             </h4>
-            <p className="text-[9.5px] text-amber-600 font-medium">Awaiting admin verification</p>
+            <p className="text-[9.5px] text-amber-600 font-medium">Awaiting delivery verification</p>
           </div>
         </div>
 
-        {/* ₹100 Automatic Commission Policy Rule Card */}
-        <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 shadow-2xs space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
-              ₹100
+        {/* Automatic Commission Policy Rule Card with 7 Slabs */}
+        <div className="bg-emerald-50 rounded-2xl p-3.5 border border-emerald-200 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+                ₹
+              </div>
+              <h4 className="font-black text-xs text-emerald-950">Official Commission Slabs</h4>
             </div>
-            <h4 className="font-black text-xs text-amber-950">Automatic ₹100 Wallet Commission Policy</h4>
+            <span className="text-[9.5px] bg-emerald-200/80 text-emerald-900 font-extrabold px-2 py-0.5 rounded-full">
+              7 Tier Slabs
+            </span>
           </div>
-          <p className="text-[11px] text-amber-900 leading-snug">
-            Orders with an eligible total amount <strong>strictly greater than ₹1,500</strong> earn a fixed ₹100 commission credited automatically to your wallet upon Admin delivery approval.
+
+          <p className="text-[10.5px] text-emerald-900 leading-snug">
+            Commission is calculated automatically from the eligible delivered order amount and credited directly to your wallet upon delivery verification:
           </p>
-          <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] text-center font-bold">
-            <span className="bg-amber-100/80 p-1 rounded-lg text-amber-800">₹1,500 = ₹0</span>
-            <span className="bg-emerald-100 p-1 rounded-lg text-emerald-800">₹1,501 = ₹100</span>
-            <span className="bg-emerald-100 p-1 rounded-lg text-emerald-800">₹2,000+ = ₹100</span>
+
+          <div className="grid grid-cols-2 gap-1.5 pt-1 text-[10px]">
+            {COMMISSION_SLABS.map((slab, idx) => (
+              <div key={idx} className="bg-white/80 p-2 rounded-xl border border-emerald-100 flex items-center justify-between">
+                <span className="text-slate-600 font-medium">{slab.label}</span>
+                <span className="font-black text-emerald-700">₹{slab.commission}</span>
+              </div>
+            ))}
           </div>
+
+          <p className="text-[9.5px] text-emerald-800/80 italic pt-0.5">
+            Examples: ₹1,200 = ₹50 • ₹1,500 = ₹100 • ₹2,500 = ₹150 • ₹6,000 = ₹300 • ₹10,001 = ₹500
+          </p>
         </div>
 
         {/* Permanent Commission Transaction History Ledger */}

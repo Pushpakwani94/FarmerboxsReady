@@ -238,7 +238,7 @@ export const DashboardScreen: React.FC = () => {
                 Welcome, {userProfile.name}!
               </h4>
               <p className="text-[10.5px] text-slate-600 font-medium leading-relaxed">
-                Register your first hotel partner to start placing vegetable orders & earning ₹100 commission per qualifying order.
+                Register your first hotel partner to start placing vegetable orders & earning up to ₹500 commission per qualifying order.
               </p>
             </div>
             <button
@@ -312,7 +312,7 @@ export const DashboardScreen: React.FC = () => {
               </div>
             </div>
 
-            {/* Slide 2: Daily ₹100 Incentive & Target Progress */}
+            {/* Slide 2: Multi-Slab Incentive Tracker */}
             <div
               onClick={() => setCurrentScreen('COMMISSION')}
               className="w-[300px] shrink-0 snap-center bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#4338ca] rounded-2xl p-4 text-white shadow-md cursor-pointer relative overflow-hidden group border border-indigo-400/20"
@@ -324,31 +324,31 @@ export const DashboardScreen: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[9.5px] font-black uppercase tracking-wider text-indigo-200">
-                      Daily ₹100 Incentive Tracker
+                      Multi-Slab Commission Slabs
                     </span>
                     <h3 className="text-base font-black tracking-tight text-white mt-0.5">
-                      {todayStats.bonusEligibleToday} Orders Qualified
+                      ₹50 to ₹500 / Order
                     </h3>
                   </div>
                 </div>
                 <span className="text-[9.5px] bg-indigo-300/20 text-indigo-200 border border-indigo-300/30 px-2 py-0.5 rounded-full font-bold">
-                  Orders &gt; ₹1,500
+                  7 Slabs
                 </span>
               </div>
 
               {/* Progress Bar towards 5 Orders Daily Target */}
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between text-[10px] text-indigo-200 font-semibold">
-                  <span>Daily Target: 5 Orders</span>
+                  <span>Today's Target: 5 Orders</span>
                   <span className="font-bold text-white">
-                    {Math.min(todayStats.bonusEligibleToday, 5)} / 5 Completed
+                    {Math.min(todayStats.totalOrdersToday, 5)} / 5 Completed
                   </span>
                 </div>
                 <div className="w-full bg-black/30 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-gradient-to-r from-amber-400 to-emerald-400 h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min((todayStats.bonusEligibleToday / 5) * 100, 100)}%`
+                      width: `${Math.min((todayStats.totalOrdersToday / 5) * 100, 100)}%`
                     }}
                   ></div>
                 </div>

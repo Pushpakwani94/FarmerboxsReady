@@ -38,6 +38,7 @@ import {
 import { AssignOrderModal } from '../components/Modals/AssignOrderModal';
 import { ProduceItemInspectModal, type ProduceItemInspectionData } from '../components/Modals/ProduceItemInspectModal';
 import { resolveProductImage } from '../utils/productImages';
+import { calculateCommission } from '../utils/commission';
 import type { OrderStatus, Order } from '../types';
 
 export const OrdersPage: React.FC = () => {
@@ -1095,32 +1096,39 @@ export const OrdersPage: React.FC = () => {
                           </p>
                         </td>
 
-                        {/* Driver (Clickable to manage Drivers) */}
+                        {/* Delivery Driver Column (Shows Driver Details or Unassigned status) */}
                         <td className="py-3 px-3 align-top">
                           {ord.driver && ord.driver !== 'Not Assigned' && ord.driver !== 'Unassigned' ? (
-                            <button
-                              onClick={() => setActiveTab('Delivery Drivers')}
-                              className="text-left group cursor-pointer"
-                              title="Manage Delivery Driver"
-                            >
-                              <p className="font-bold text-slate-800 group-hover:text-emerald-700 text-xs flex items-center gap-1">
-                                <Truck className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
-                                {ord.driver}
-                              </p>
-                              {ord.driverPhone && (
-                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">📞 {ord.driverPhone}</p>
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => setActiveTab('Delivery Drivers')}
+                                className="text-left group cursor-pointer"
+                                title="Manage Delivery Driver"
+                              >
+                                <p className="font-bold text-slate-800 group-hover:text-emerald-700 text-xs flex items-center gap-1">
+                                  <Truck className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                                  {ord.driver}
+                                </p>
+                                {ord.driverPhone && (
+                                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">📞 {ord.driverPhone}</p>
+                                )}
+                              </button>
+                              {!isDelivered && (
+                                <button
+                                  onClick={() => {
+                                    setAssignModalOrderId(ord.id);
+                                    setIsAssignModalOpen(true);
+                                  }}
+                                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold underline text-left cursor-pointer"
+                                >
+                                  Change Driver
+                                </button>
                               )}
-                            </button>
+                            </div>
                           ) : (
-                            <button
-                              onClick={() => {
-                                setAssignModalOrderId(ord.id);
-                                setIsAssignModalOpen(true);
-                              }}
-                              className="text-[11px] text-amber-700 hover:text-amber-800 font-bold underline cursor-pointer"
-                            >
-                              + Assign Driver
-                            </button>
+                            <span className="text-[11px] text-slate-400 font-medium italic">
+                              Unassigned
+                            </span>
                           )}
                         </td>
 
@@ -1139,30 +1147,26 @@ export const OrdersPage: React.FC = () => {
                           </span>
                         </td>
 
-                        {/* Verification & Actions */}
+                        {/* Verification & Actions Column */}
                         <td className="py-3 px-3 align-top text-right">
                           <div className="flex flex-col items-end gap-1.5">
-                            {/* If Delivered: Admin Delivery Verification */}
-                            {isDelivered && (
-                              isApproved ? (
-                                <span className={`font-black text-[10.5px] px-2 py-0.5 rounded-lg shadow-2xs inline-flex items-center gap-1 ${
-                                  Number(ord.totalAmount ?? ord.amount ?? 0) > 1500
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-slate-600 text-white'
-                                }`}>
+                            {/* If Delivered: Admin Delivery Verification with exact slab commission */}
+                            {isDelivered && (() => {
+                              const totalAmt = Number(ord.totalAmount ?? ord.amount ?? 0);
+                              const orderCommission = calculateCommission(totalAmt);
+                              return isApproved ? (
+                                <span className="font-black text-[10.5px] px-2 py-0.5 rounded-lg shadow-2xs inline-flex items-center gap-1 bg-emerald-600 text-white">
                                   <CheckCircle2 className="w-3 h-3" />
-                                  {Number(ord.totalAmount ?? ord.amount ?? 0) > 1500
-                                    ? 'Delivery Approved (+₹100 Paid)'
-                                    : 'Delivery Approved (₹0, ≤ ₹1,500)'}
+                                  Delivery Approved (+₹{orderCommission} Paid)
                                 </span>
                               ) : (
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => approveDelivery(ord.id)}
-                                    title={Number(ord.totalAmount ?? ord.amount ?? 0) > 1500 ? 'Verify delivery and release ₹100 commission' : 'Verify delivery (no commission since order ≤ ₹1,500)'}
+                                    title={`Verify delivery and credit ₹${orderCommission} commission`}
                                     className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-[10.5px] rounded-lg shadow-xs cursor-pointer"
                                   >
-                                    {Number(ord.totalAmount ?? ord.amount ?? 0) > 1500 ? 'Approve Delivery (+₹100)' : 'Approve Delivery (₹0)'}
+                                    Approve Delivery (+₹{orderCommission})
                                   </button>
                                   <button
                                     onClick={() => rejectDelivery(ord.id)}
@@ -1172,10 +1176,10 @@ export const OrdersPage: React.FC = () => {
                                     Reject
                                   </button>
                                 </div>
-                              )
-                            )}
+                              );
+                            })()}
 
-                            {/* If Pending: Accept / Driver Assignment */}
+                            {/* If Pending: Accept Order and/or Assign Driver */}
                             {isPending && (
                               <div className="flex items-center gap-1">
                                 <button
@@ -1184,16 +1188,32 @@ export const OrdersPage: React.FC = () => {
                                 >
                                   Accept Order
                                 </button>
-                                <button
-                                  onClick={() => {
-                                    setAssignModalOrderId(ord.id);
-                                    setIsAssignModalOpen(true);
-                                  }}
-                                  className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-[10.5px] rounded-lg border border-purple-200 cursor-pointer"
-                                >
-                                  Assign Driver
-                                </button>
+                                {(!ord.driver || ord.driver === 'Not Assigned' || ord.driver === 'Unassigned') && (
+                                  <button
+                                    onClick={() => {
+                                      setAssignModalOrderId(ord.id);
+                                      setIsAssignModalOpen(true);
+                                    }}
+                                    className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-[10.5px] rounded-lg border border-purple-200 cursor-pointer"
+                                  >
+                                    Assign Driver
+                                  </button>
+                                )}
                               </div>
+                            )}
+
+                            {/* If Accepted but no driver assigned: Display single Assign Driver button */}
+                            {(ord.status === 'Accepted' || ord.status === 'Confirmed' || ord.status === 'Preparing') &&
+                              (!ord.driver || ord.driver === 'Not Assigned' || ord.driver === 'Unassigned') && (
+                              <button
+                                onClick={() => {
+                                  setAssignModalOrderId(ord.id);
+                                  setIsAssignModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-lg shadow-xs cursor-pointer"
+                              >
+                                Assign Driver
+                              </button>
                             )}
 
                             {/* View Full Details Button */}

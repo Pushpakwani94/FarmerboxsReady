@@ -24,10 +24,12 @@ import {
   Clock,
   IndianRupee,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Truck
 } from 'lucide-react';
 import type { Zone, Hotel, Joiner, Order } from '../types';
 import { authService } from '../firebase/authService';
+import { calculateCommission } from '../utils/commission';
 
 interface PuneZoneGeo {
   id: string;
@@ -256,7 +258,8 @@ export const ZonesPage: React.FC = () => {
     setSelectedOrder,
     joiners,
     hotels,
-    orders
+    orders,
+    drivers
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -264,7 +267,7 @@ export const ZonesPage: React.FC = () => {
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [hoveredMapZone, setHoveredMapZone] = useState<string | null>(null);
   const [showRiverLayer, setShowRiverLayer] = useState(true);
-  const [zoneDetailTab, setZoneDetailTab] = useState<'joiners' | 'hotels' | 'orders'>('joiners');
+  const [zoneDetailTab, setZoneDetailTab] = useState<'joiners' | 'hotels' | 'orders' | 'drivers'>('joiners');
 
   // Filtered Zones List
   const filteredZones = useMemo(() => {
@@ -298,22 +301,28 @@ export const ZonesPage: React.FC = () => {
         hotelsList: [],
         joinersList: [],
         ordersList: [],
+        driversList: [],
         hotelsCount: 0,
         joinersCount: 0,
         ordersCount: 0,
+        driversCount: 0,
         salesCount: 0,
         deliveredOrdersCount: 0,
-        pendingOrdersCount: 0
+        pendingOrdersCount: 0,
+        commissionsTotal: 0
       };
     }
 
     // 1. Matched Hotels
     const zHotels = uniqueHotels.filter(h => isMatchZone(h.zone, zone) || isMatchZone(h.address, zone));
 
-    // 2. Matched Joiners (Live real joiners assigned to this zone)
+    // 2. Matched Joiners (Live real joiners assigned to this zone - supports 10+ joiners per zone)
     const zJoiners = uniqueJoiners.filter(j => isMatchZone(j.zone, zone));
 
-    // 3. Matched Orders: check order's zone, order's hotelZone, or if order's hotel belongs to this zone
+    // 3. Matched Drivers assigned to this zone
+    const zDrivers = (drivers || []).filter(d => isMatchZone(d.zone, zone) || isMatchZone((d as any).assignedZone, zone));
+
+    // 4. Matched Orders: check order's zone, order's hotelZone, or if order's hotel belongs to this zone
     const zHotelIds = new Set(zHotels.map(h => String(h.id || (h as any).hotelCode || h.name)));
     const zOrders = uniqueOrders.filter(o => {
       if (isMatchZone(o.zone, zone) || isMatchZone(o.zoneName, zone) || isMatchZone(o.hotelZone, zone)) {
@@ -328,16 +337,29 @@ export const ZonesPage: React.FC = () => {
     const deliveredCount = zOrders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').length;
     const pendingCount = zOrders.filter(o => o.status === 'Pending' || o.status === 'Confirmed' || o.status === 'Accepted' || o.status === 'Out for Delivery').length;
 
+    // 5. Zone Commission attributed across delivered orders
+    const zCommissions = zOrders.filter(o => o.status === 'Delivered' || o.orderStatus === 'Delivered').reduce((sum, o) => {
+      const comm = (o as any).commissionAmount !== undefined && (o as any).commissionAmount !== null
+        ? Number((o as any).commissionAmount)
+        : ((o as any).commission !== undefined && (o as any).commission !== null
+          ? Number((o as any).commission)
+          : calculateCommission(Number(o.totalAmount || (o as any).amount || 0)));
+      return sum + comm;
+    }, 0);
+
     return {
       hotelsList: zHotels,
       joinersList: zJoiners,
       ordersList: zOrders,
+      driversList: zDrivers,
       hotelsCount: zHotels.length,
       joinersCount: zJoiners.length,
       ordersCount: zOrders.length,
+      driversCount: zDrivers.length,
       salesCount: zSales,
       deliveredOrdersCount: deliveredCount,
-      pendingOrdersCount: pendingCount
+      pendingOrdersCount: pendingCount,
+      commissionsTotal: zCommissions
     };
   };
 
@@ -754,49 +776,68 @@ export const ZonesPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             {/* Left: Zone Metrics & Deep-Dive Tabs (Col 6) */}
             <div className="lg:col-span-6 space-y-4">
-              {/* Zone Metrics 4-Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
+              {/* Zone Metrics 6-Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
                 <div
                   onClick={() => setZoneDetailTab('hotels')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     zoneDetailTab === 'hotels' ? 'bg-sky-100/70 border-sky-300 ring-2 ring-sky-400' : 'bg-sky-50 border-sky-100 hover:bg-sky-100/50'
                   }`}
                 >
                   <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
                     <Building2 className="w-3 h-3 text-sky-600" /> Hotels
                   </p>
-                  <p className="font-bold text-sky-900 text-lg mt-0.5">{activeZoneStats.hotelsCount}</p>
+                  <p className="font-bold text-sky-900 text-base mt-0.5">{activeZoneStats.hotelsCount}</p>
                 </div>
 
                 <div
                   onClick={() => setZoneDetailTab('joiners')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     zoneDetailTab === 'joiners' ? 'bg-orange-100/70 border-orange-300 ring-2 ring-orange-400' : 'bg-orange-50 border-orange-100 hover:bg-orange-100/50'
                   }`}
                 >
                   <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
                     <Users className="w-3 h-3 text-orange-600" /> Joiners
                   </p>
-                  <p className="font-bold text-orange-900 text-lg mt-0.5">{activeZoneStats.joinersCount}</p>
+                  <p className="font-bold text-orange-900 text-base mt-0.5">{activeZoneStats.joinersCount}</p>
+                </div>
+
+                <div
+                  onClick={() => setZoneDetailTab('drivers')}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    zoneDetailTab === 'drivers' ? 'bg-emerald-100/70 border-emerald-300 ring-2 ring-emerald-400' : 'bg-emerald-50 border-emerald-100 hover:bg-emerald-100/50'
+                  }`}
+                >
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <Truck className="w-3 h-3 text-emerald-600" /> Drivers
+                  </p>
+                  <p className="font-bold text-emerald-900 text-base mt-0.5">{activeZoneStats.driversCount}</p>
                 </div>
 
                 <div
                   onClick={() => setZoneDetailTab('orders')}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
                     zoneDetailTab === 'orders' ? 'bg-purple-100/70 border-purple-300 ring-2 ring-purple-400' : 'bg-purple-50 border-purple-100 hover:bg-purple-100/50'
                   }`}
                 >
                   <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
                     <ShoppingBag className="w-3 h-3 text-purple-600" /> Orders
                   </p>
-                  <p className="font-bold text-purple-900 text-lg mt-0.5">{activeZoneStats.ordersCount}</p>
+                  <p className="font-bold text-purple-900 text-base mt-0.5">{activeZoneStats.ordersCount}</p>
                 </div>
 
-                <div className="bg-rose-50 p-3 rounded-xl border border-rose-100">
+                <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-100">
                   <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
-                    <IndianRupee className="w-3 h-3 text-rose-600" /> Total Sales
+                    <IndianRupee className="w-3 h-3 text-rose-600" /> Sales
                   </p>
-                  <p className="font-bold text-rose-900 text-lg mt-0.5">₹{activeZoneStats.salesCount.toLocaleString('en-IN')}</p>
+                  <p className="font-bold text-rose-900 text-base mt-0.5">₹{activeZoneStats.salesCount.toLocaleString('en-IN')}</p>
+                </div>
+
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100">
+                  <p className="text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-600" /> Commission
+                  </p>
+                  <p className="font-bold text-amber-900 text-base mt-0.5">₹{activeZoneStats.commissionsTotal.toLocaleString('en-IN')}</p>
                 </div>
               </div>
 
@@ -883,17 +924,28 @@ export const ZonesPage: React.FC = () => {
                     >
                       Orders ({activeZoneStats.ordersList.length})
                     </button>
+                    <button
+                      onClick={() => setZoneDetailTab('drivers')}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        zoneDetailTab === 'drivers'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Drivers ({activeZoneStats.driversList.length})
+                    </button>
                   </div>
 
                   <button
                     onClick={() => {
                       if (zoneDetailTab === 'joiners') setActiveTab('Hotel Joiners');
                       else if (zoneDetailTab === 'hotels') setActiveTab('Hotels');
+                      else if (zoneDetailTab === 'drivers') setActiveTab('Delivery Drivers');
                       else setActiveTab('Orders');
                     }}
                     className="text-[11px] text-blue-600 font-semibold hover:underline cursor-pointer flex items-center gap-0.5"
                   >
-                    View in {zoneDetailTab === 'joiners' ? 'Joiners' : zoneDetailTab === 'hotels' ? 'Hotels' : 'Orders'} →
+                    View in {zoneDetailTab === 'joiners' ? 'Joiners' : zoneDetailTab === 'hotels' ? 'Hotels' : zoneDetailTab === 'drivers' ? 'Drivers' : 'Orders'} →
                   </button>
                 </div>
 
@@ -1025,6 +1077,46 @@ export const ZonesPage: React.FC = () => {
                                 : 'bg-blue-100 text-blue-800'
                             }`}>
                               {o.status || 'Active'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 4: Assigned Delivery Drivers */}
+                {zoneDetailTab === 'drivers' && (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {activeZoneStats.driversList.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-100 text-slate-400 text-xs">
+                        <Truck className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                        No delivery drivers assigned to {activeZone.name} yet.
+                      </div>
+                    ) : (
+                      activeZoneStats.driversList.map((d, idx) => (
+                        <div
+                          key={d.id || idx}
+                          onClick={() => setActiveTab('Delivery Drivers')}
+                          className="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-emerald-50/60 rounded-xl border border-slate-100 cursor-pointer transition-colors"
+                          title={`Click to view Driver ${d.name}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-slate-400 text-xs w-4">{idx + 1}</span>
+                            <div>
+                              <p className="font-bold text-slate-800 text-xs">{d.name}</p>
+                              <p className="text-[10.5px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Phone className="w-2.5 h-2.5 text-slate-400" /> {d.mobile || '—'}
+                                {d.vehicleNo && <span className="font-mono text-emerald-700 font-semibold">• {d.vehicleNo}</span>}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">
+                              {d.vehicleType || 'Vehicle'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                              {d.status || 'Active'}
                             </span>
                           </div>
                         </div>

@@ -40,6 +40,7 @@ import type {
 import { MakePayoutModal } from '../components/Modals/MakePayoutModal';
 import { JoinerCommissionHistoryModal } from '../components/Modals/JoinerCommissionHistoryModal';
 import { EditCommissionModal } from '../components/Modals/EditCommissionModal';
+import { calculateCommission, COMMISSION_SLABS } from '../utils/commission';
 
 export const CommissionPage: React.FC = () => {
   const { joiners, orders, payments, isDatabaseConnected, updateJoiner, deleteJoiner, confirmAction } = useApp();
@@ -83,7 +84,8 @@ export const CommissionPage: React.FC = () => {
       });
 
       // Count completed / delivered orders ONLY for commission
-      const deliveredOrdersCount = jOrders.filter(o => o.status === 'Delivered' || (o.status as string) === 'Completed').length;
+      const deliveredOrders = jOrders.filter(o => o.status === 'Delivered' || (o.status as string) === 'Completed');
+      const deliveredOrdersCount = deliveredOrders.length;
       // Pending orders (awaiting delivery / in progress)
       const pendingOrdersCount = jOrders.filter(o => o.status !== 'Delivered' && (o.status as string) !== 'Completed' && o.status !== 'Cancelled').length;
 
@@ -92,8 +94,15 @@ export const CommissionPage: React.FC = () => {
       const pendingCount = jOrders.length > 0 ? pendingOrdersCount : Math.max(0, totalOrdersCount - completedCount);
       const commissionRate = 100;
       
-      // Dynamic cumulative commission
-      const liveDeliveredEarnings = completedCount * commissionRate;
+      // Dynamic cumulative commission calculated from exact slabs
+      const liveDeliveredEarnings = deliveredOrders.reduce((sum, o) => {
+        const comm = (o as any).commissionAmount !== undefined && (o as any).commissionAmount !== null
+          ? Number((o as any).commissionAmount)
+          : ((o as any).commission !== undefined && (o as any).commission !== null
+            ? Number((o as any).commission)
+            : calculateCommission(Number(o.totalAmount || (o as any).amount || 0)));
+        return sum + comm;
+      }, 0);
       const recordedEarnings = Number(j.totalEarnings ?? j.commission ?? j.accumulatedCommission ?? 0);
       const totalCommission = Math.max(recordedEarnings, liveDeliveredEarnings);
 
@@ -103,14 +112,20 @@ export const CommissionPage: React.FC = () => {
       const status: 'Paid' | 'Pending' = pendingAmount <= 0 && (totalCommission > 0 || paidAmount > 0) ? 'Paid' : 'Pending';
 
       const recentTransactions: CommissionTransaction[] = jOrders.length > 0
-        ? jOrders.slice(0, 5).map(o => ({
-            id: `TXN-${o.id}`,
-            date: o.date || 'Today',
-            orderId: String(o.id || o.orderId),
-            hotelName: o.hotelName || 'Partner Hotel',
-            amount: Number((o as any).commission || commissionRate),
-            status: (o.status === 'Delivered' || (o.status as string) === 'Completed') ? 'Paid' : 'Pending'
-          }))
+        ? jOrders.slice(0, 5).map(o => {
+            const oAmt = Number(o.totalAmount || (o as any).amount || 0);
+            const oComm = (o as any).commissionAmount !== undefined && (o as any).commissionAmount !== null
+              ? Number((o as any).commissionAmount)
+              : calculateCommission(oAmt);
+            return {
+              id: `TXN-${o.id}`,
+              date: o.date || 'Today',
+              orderId: String(o.id || o.orderId),
+              hotelName: o.hotelName || 'Partner Hotel',
+              amount: oComm,
+              status: (o.status === 'Delivered' || (o.status as string) === 'Completed') ? 'Paid' : 'Pending'
+            };
+          })
         : (j.recentTransactions && j.recentTransactions.length > 0
             ? j.recentTransactions
             : [
@@ -527,8 +542,8 @@ export const CommissionPage: React.FC = () => {
             <CreditCard className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-slate-500">Commission Rate</p>
-            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹100 / order</h3>
+            <p className="text-[11px] font-semibold text-slate-500">Commission Tiers</p>
+            <h3 className="text-xl font-bold text-slate-900 leading-none mt-0.5">₹50 – ₹500</h3>
           </div>
         </div>
 
@@ -542,6 +557,41 @@ export const CommissionPage: React.FC = () => {
           >
             <Send className="w-4 h-4" /> Make Payout
           </button>
+        </div>
+      </div>
+
+      {/* Commission Slabs Reference Guide (Live Business Logic) */}
+      <div className="bg-gradient-to-r from-emerald-900 via-[#14532d] to-emerald-800 rounded-2xl p-4 text-white shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/15">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white/15 backdrop-blur-xs flex items-center justify-center text-emerald-300 font-black text-sm">
+              ₹
+            </div>
+            <div>
+              <h4 className="text-xs font-black tracking-wide uppercase text-emerald-200">
+                Official Multi-Slab Automatic Commission Tiers
+              </h4>
+              <p className="text-[11px] text-emerald-100/90 font-medium">
+                Auto-calculated on delivered orders & instantly credited to joiner wallet with complete audit ledger.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 px-3 py-1 rounded-full font-bold self-start md:self-auto">
+            7 Dynamic Slabs Active
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-3 text-xs">
+          {COMMISSION_SLABS.map((slab, i) => (
+            <div key={i} className="bg-black/25 rounded-xl p-2.5 backdrop-blur-xs border border-white/10 text-center">
+              <span className="text-[10px] text-emerald-200 font-semibold block leading-tight">
+                {slab.label}
+              </span>
+              <span className="text-base font-black text-white block mt-1">
+                ₹{slab.commission}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

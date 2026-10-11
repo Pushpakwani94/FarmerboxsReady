@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Building2, Calendar, Clock, Truck, CheckCircle2, AlertCircle, ShoppingBag, ShieldCheck } from 'lucide-react';
 import type { MobileOrder } from '../JoinerAppContext';
+import { calculateCommission } from '../../utils/commission';
 
 interface MobileOrderDetailModalProps {
   order: MobileOrder | null;
@@ -11,7 +12,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({ 
   if (!order) return null;
 
   const totalAmt = Number(order.totalAmount ?? order.amount ?? 0);
-  const isEligible = totalAmt > 1500;
+  const commAmount = Number((order as any).commissionAmount || calculateCommission(totalAmt));
+  const isEligible = commAmount > 0;
   const rawStatus = String(order.status || order.orderStatus || 'Pending');
   const isDelivered = rawStatus.toLowerCase() === 'delivered';
 
@@ -45,8 +47,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({ 
         <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <div>
-            <p className="text-xs font-bold">₹100 Commission Credited</p>
-            <p className="text-[10px] text-emerald-600">Successfully credited to your wallet</p>
+            <p className="text-xs font-bold">₹{commAmount} Commission Credited</p>
+            <p className="text-[10px] text-emerald-600">Successfully credited to your wallet based on order slab</p>
           </div>
         </div>
       );
@@ -57,8 +59,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({ 
         <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-700">
           <AlertCircle className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <div>
-            <p className="text-xs font-bold">₹0 Commission (Order ≤ ₹1,500)</p>
-            <p className="text-[10px] text-slate-500">Only orders strictly above ₹1,500 earn ₹100 commission</p>
+            <p className="text-xs font-bold">₹0 Commission</p>
+            <p className="text-[10px] text-slate-500">Order amount ₹0 is not eligible for commission</p>
           </div>
         </div>
       );
@@ -69,8 +71,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({ 
         <div className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800">
           <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
           <div>
-            <p className="text-xs font-bold">₹100 Commission Pending Admin Approval</p>
-            <p className="text-[10px] text-amber-600">Will be credited upon Admin delivery verification</p>
+            <p className="text-xs font-bold">₹{commAmount} Commission Pending Verification</p>
+            <p className="text-[10px] text-amber-600">Will be credited upon delivery approval</p>
           </div>
         </div>
       );
@@ -80,8 +82,8 @@ export const MobileOrderDetailModal: React.FC<MobileOrderDetailModalProps> = ({ 
       <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-800">
         <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
         <div>
-          <p className="text-xs font-bold">Eligible for ₹100 Commission</p>
-          <p className="text-[10px] text-blue-600">Order &gt; ₹1,500. Credited once delivered & approved.</p>
+          <p className="text-xs font-bold">Eligible for ₹{commAmount} Commission</p>
+          <p className="text-[10px] text-blue-600">Order amount ₹{totalAmt.toLocaleString('en-IN')}. Credited upon delivery.</p>
         </div>
       </div>
     );

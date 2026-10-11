@@ -35,6 +35,7 @@ export interface WalletTransaction {
   orderId: string;
   hotelId?: string;
   hotelName?: string;
+  zone?: string;
   type?: 'commission' | 'bonus' | 'withdrawal' | 'deposit' | 'adjustment';
   transactionType?: 'commission' | 'bonus' | 'withdrawal' | 'deposit' | 'adjustment';
   amount: number;

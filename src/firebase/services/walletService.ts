@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../config';
 import type { WalletTransaction, JoinerWallet } from '../../types';
+import { calculateCommission, COMMISSION_SLABS } from '../../utils/commission';
 
 export const WALLET_COLLECTION = 'wallets';
 export const WALLET_TX_COLLECTION = 'walletTransactions';
@@ -178,31 +179,41 @@ export const walletService = {
   },
 
   /**
-   * Atomic ₹100 Wallet Commission Credit on Admin Delivery Approval.
-   * Requirement 7 Rule: strictly greater than ₹1,500 (> 1500).
+   * Atomic Multi-Slab Wallet Commission Credit on Delivery.
+   * Uses exact business slabs:
+   * Below ₹1,500 = ₹50
+   * ₹1,500 to below ₹2,000 = ₹100
+   * ₹2,000 to below ₹3,000 = ₹150
+   * ₹3,000 to below ₹4,000 = ₹200
+   * ₹4,000 to below ₹5,000 = ₹250
+   * ₹5,000 to ₹10,000 inclusive = ₹300
+   * Above ₹10,000 = ₹500
+   *
    * Generates a deterministic order transaction ID (tx_comm_<cleanOrderId>)
    * to guarantee that the same order can NEVER be credited more than once.
    */
   async creditOrderCommission(
     order: any,
     adminName: string = 'Super Admin'
-  ): Promise<{ success: boolean; message: string; transactionId?: string; isBonusEligible: boolean }> {
+  ): Promise<{ success: boolean; message: string; transactionId?: string; isBonusEligible: boolean; commissionAmount: number }> {
     if (!isFirebaseConfigured() || !db) {
-      return { success: false, message: 'Database not connected.', isBonusEligible: false };
+      return { success: false, message: 'Database not connected.', isBonusEligible: false, commissionAmount: 0 };
     }
 
     const orderId = String(order.orderId || order.id || '').trim();
     const cleanOrderId = orderId.replace(/^#/, '');
     const totalAmt = Number(order.totalAmount ?? order.amount ?? order.grandTotal ?? 0);
 
-    // Strict Rule: Amount must be STRICTLY GREATER than ₹1,500
-    const isBonusEligible = totalAmt > 1500;
+    // Calculate exact commission according to multi-tier slabs
+    const commissionAmount = calculateCommission(totalAmt);
+    const isBonusEligible = commissionAmount > 0;
 
     const partnerId = String(order.assignedJoinerId || order.partnerId || order.joinerId || order.joinedBy || '');
     const cleanPhone = String(order.joinerPhone || order.mobileNumber || '').replace(/\D/g, '').slice(-10);
     const joinerDocId = partnerId.startsWith('usr_') ? partnerId : (cleanPhone ? `usr_${cleanPhone}` : partnerId);
     const hotelId = String(order.hotelId || order.customerId || '');
     const hotelName = String(order.hotelName || order.customerName || 'Hotel Partner');
+    const hotelZone = String(order.hotelZone || order.zone || 'Kharadi');
 
     const deterministicTxId = `tx_comm_${cleanOrderId}`;
 
@@ -217,13 +228,14 @@ export const walletService = {
       if (existingTxSnap.exists()) {
         return {
           success: true,
-          message: `Order #${orderId} delivery was already approved. Commission previously released.`,
+          message: `Order #${orderId} commission was already credited (₹${commissionAmount}).`,
           transactionId: deterministicTxId,
-          isBonusEligible: true
+          isBonusEligible: true,
+          commissionAmount
         };
       }
 
-      // If order amount is <= 1500: No commission is credited
+      // If order amount is 0: No commission
       if (!isBonusEligible) {
         await updateDoc(orderRef, {
           adminApproved: true,
@@ -239,8 +251,9 @@ export const walletService = {
 
         return {
           success: true,
-          message: `Delivery approved for Order #${orderId}. Order amount (₹${totalAmt.toLocaleString('en-IN')}) is ₹1,500 or below (not eligible for ₹100 bonus).`,
-          isBonusEligible: false
+          message: `Delivery approved for Order #${orderId}. Zero amount order (not eligible for commission).`,
+          isBonusEligible: false,
+          commissionAmount: 0
         };
       }
 
@@ -255,7 +268,7 @@ export const walletService = {
         deliveredAt: order.deliveredAt || serverTimestamp(),
         status: 'Delivered',
         orderStatus: 'Delivered',
-        commissionAmount: 100,
+        commissionAmount,
         commissionStatus: 'credited',
         walletCredited: true,
         updatedAt: serverTimestamp()
@@ -271,13 +284,14 @@ export const walletService = {
         orderId: cleanOrderId,
         hotelId,
         hotelName,
+        zone: hotelZone,
         orderAmount: totalAmt,
-        commissionAmount: 100,
-        amount: 100,
+        commissionAmount,
+        amount: commissionAmount,
         type: 'commission',
         transactionType: 'commission',
         status: 'credited',
-        description: `₹100 Commission for Order #${cleanOrderId} (${hotelName})`,
+        description: `₹${commissionAmount} Commission for Order #${cleanOrderId} (${hotelName})`,
         createdAt: serverTimestamp()
       };
       batch.set(txRef, walletTx);
@@ -287,15 +301,17 @@ export const walletService = {
       if (walletSnap.exists()) {
         const cur = walletSnap.data();
         batch.update(walletRef, {
-          walletBalance: Number(cur.walletBalance || 0) + 100,
-          totalCommission: Number(cur.totalCommission || 0) + 100,
+          walletBalance: Number(cur.walletBalance || 0) + commissionAmount,
+          totalCommission: Number(cur.totalCommission || 0) + commissionAmount,
+          todayCommission: Number(cur.todayCommission || 0) + commissionAmount,
           updatedAt: serverTimestamp()
         });
       } else {
         batch.set(walletRef, {
           joinerId: joinerDocId,
-          walletBalance: 100,
-          totalCommission: 100,
+          walletBalance: commissionAmount,
+          totalCommission: commissionAmount,
+          todayCommission: commissionAmount,
           updatedAt: serverTimestamp()
         });
       }
@@ -305,9 +321,9 @@ export const walletService = {
       if (jSnap.exists()) {
         const jData = jSnap.data();
         batch.update(joinerRef, {
-          walletBalance: Number(jData.walletBalance || 0) + 100,
-          totalEarnings: Number(jData.totalEarnings || jData.commissionEarned || 0) + 100,
-          commissionEarned: Number(jData.commissionEarned || jData.totalEarnings || 0) + 100,
+          walletBalance: Number(jData.walletBalance || 0) + commissionAmount,
+          totalEarnings: Number(jData.totalEarnings || jData.commissionEarned || 0) + commissionAmount,
+          commissionEarned: Number(jData.commissionEarned || jData.totalEarnings || 0) + commissionAmount,
           updatedAt: serverTimestamp()
         });
       }
@@ -316,13 +332,124 @@ export const walletService = {
 
       return {
         success: true,
-        message: `Delivery approved for Order #${orderId}! ₹100 commission successfully credited to wallet.`,
+        message: `Delivery completed for Order #${orderId}! ₹${commissionAmount} commission credited to joiner wallet.`,
         transactionId: deterministicTxId,
-        isBonusEligible: true
+        isBonusEligible: true,
+        commissionAmount
       };
     } catch (err: any) {
       console.error('walletService.creditOrderCommission error:', err);
-      return { success: false, message: err?.message || 'Failed to process commission.', isBonusEligible };
+      return { success: false, message: err?.message || 'Failed to process commission.', isBonusEligible, commissionAmount: 0 };
+    }
+  },
+
+  /**
+   * Commission Reversal on Order Cancellation or Refund.
+   * Atomically reverses previously credited commission.
+   */
+  async reverseOrderCommission(
+    order: any,
+    reason: string = 'Order cancelled / refunded'
+  ): Promise<{ success: boolean; message: string }> {
+    if (!isFirebaseConfigured() || !db) {
+      return { success: false, message: 'Database not connected.' };
+    }
+
+    const orderId = String(order.orderId || order.id || '').trim();
+    const cleanOrderId = orderId.replace(/^#/, '');
+    const commAmt = Number(order.commissionAmount ?? calculateCommission(order.totalAmount ?? order.amount ?? 0));
+
+    if (commAmt <= 0) {
+      return { success: true, message: 'No commission to reverse.' };
+    }
+
+    const revTxId = `tx_rev_${cleanOrderId}`;
+    const origTxId = `tx_comm_${cleanOrderId}`;
+    const partnerId = String(order.assignedJoinerId || order.partnerId || order.joinerId || order.joinedBy || '');
+    const cleanPhone = String(order.joinerPhone || order.mobileNumber || '').replace(/\D/g, '').slice(-10);
+    const joinerDocId = partnerId.startsWith('usr_') ? partnerId : (cleanPhone ? `usr_${cleanPhone}` : partnerId);
+
+    try {
+      const revTxRef = doc(db, WALLET_TX_COLLECTION, revTxId);
+      const origTxRef = doc(db, WALLET_TX_COLLECTION, origTxId);
+      const walletRef = doc(db, WALLET_COLLECTION, joinerDocId);
+      const joinerRef = doc(db, 'joiners', joinerDocId);
+      const orderRef = doc(db, 'orders', orderId);
+
+      // Check if already reversed
+      const revSnap = await getDoc(revTxRef);
+      if (revSnap.exists()) {
+        return { success: true, message: `Commission for Order #${orderId} was already reversed.` };
+      }
+
+      // Check if original commission was credited
+      const origSnap = await getDoc(origTxRef);
+      if (!origSnap.exists() && !order.walletCredited) {
+        return { success: true, message: `No prior credited commission for Order #${orderId}.` };
+      }
+
+      const batch = writeBatch(db);
+
+      // 1. Record reversal transaction
+      const revTx: WalletTransaction = {
+        transactionId: revTxId,
+        id: revTxId,
+        joinerId: joinerDocId,
+        partnerId: joinerDocId,
+        partnerName: String(order.partnerName || order.joiner || 'Hotel Joiner'),
+        orderId: cleanOrderId,
+        hotelId: String(order.hotelId || ''),
+        hotelName: String(order.hotelName || ''),
+        zone: String(order.zone || order.hotelZone || ''),
+        orderAmount: Number(order.totalAmount ?? order.amount ?? 0),
+        commissionAmount: -commAmt,
+        amount: -commAmt,
+        type: 'reversal' as any,
+        transactionType: 'reversal' as any,
+        status: 'reversed' as any,
+        description: `Reversal of ₹${commAmt} commission: ${reason}`,
+        createdAt: serverTimestamp()
+      };
+      batch.set(revTxRef, revTx);
+
+      // 2. Decrement wallet balance
+      const walletSnap = await getDoc(walletRef);
+      if (walletSnap.exists()) {
+        const cur = walletSnap.data();
+        batch.update(walletRef, {
+          walletBalance: Math.max(0, Number(cur.walletBalance || 0) - commAmt),
+          reversedCommission: Number(cur.reversedCommission || 0) + commAmt,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      // 3. Decrement joiner balance
+      const jSnap = await getDoc(joinerRef);
+      if (jSnap.exists()) {
+        const jData = jSnap.data();
+        batch.update(joinerRef, {
+          walletBalance: Math.max(0, Number(jData.walletBalance || 0) - commAmt),
+          commissionEarned: Math.max(0, Number(jData.commissionEarned || 0) - commAmt),
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      // 4. Update order status
+      batch.update(orderRef, {
+        commissionStatus: 'reversed',
+        walletCredited: false,
+        updatedAt: serverTimestamp()
+      });
+
+      await batch.commit();
+
+      return {
+        success: true,
+        message: `Commission of ₹${commAmt} reversed for Order #${orderId}.`
+      };
+    } catch (err: any) {
+      console.error('reverseOrderCommission exception:', err);
+      return { success: false, message: err?.message || 'Failed to reverse commission' };
     }
   },
 
