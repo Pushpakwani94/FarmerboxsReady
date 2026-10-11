@@ -138,6 +138,7 @@ interface AppContextType {
   updateAdminProfile: (data: Partial<AdminProfile>) => void;
   markNotificationsAsRead: () => void;
   markNotificationAsRead: (id: number | string) => void;
+  toggleNotificationRead: (id: number | string) => void;
   clearAllNotifications: () => void;
 
   // Actions
@@ -557,6 +558,30 @@ export const deduplicateDrivers = (list: any[]): Driver[] => {
   });
 };
 
+const deduplicateProducts = (list: Product[]): Product[] => {
+  let deletedSet = new Set<string>();
+  try {
+    const stored = localStorage.getItem('farmerbox_deleted_product_ids');
+    if (stored) {
+      const arr: string[] = JSON.parse(stored);
+      arr.forEach(id => deletedSet.add(String(id).toLowerCase()));
+    }
+  } catch {}
+
+  // Explicitly blacklist 1791712614788
+  deletedSet.add('1791712614788');
+
+  const seen = new Set<string>();
+  return (list || []).filter(p => {
+    if (!p) return false;
+    const idStr = String(p.id || '').trim();
+    if (!idStr || deletedSet.has(idStr.toLowerCase())) return false;
+    if (seen.has(idStr)) return false;
+    seen.add(idStr);
+    return true;
+  });
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const isConnected = isFirebaseConfigured();
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
@@ -567,7 +592,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [joiners, setJoiners] = useState<Joiner[]>(() => deduplicateJoiners(getStoredOrFallback('joiners', [])));
   const [drivers, setDrivers] = useState<Driver[]>(() => deduplicateDrivers(getStoredOrFallback('drivers', [])));
   const [hotels, setHotels] = useState<Hotel[]>(() => getInitialHotelsState());
-  const [products, setProducts] = useState<Product[]>(() => getStoredOrFallback('products', []));
+  const [products, setProducts] = useState<Product[]>(() => deduplicateProducts(getStoredOrFallback('products', [])));
   const [payments, setPayments] = useState<PaymentTransaction[]>(() => getStoredOrFallback('payments', []));
   const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredOrFallback('notifications', []));
@@ -645,6 +670,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleErr(err);
       }
     );
+
+    // Explicitly purge blacklisted product 1791712614788
+    try {
+      const stored = localStorage.getItem('farmerbox_deleted_product_ids');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      if (!list.includes('1791712614788')) {
+        list.push('1791712614788');
+        localStorage.setItem('farmerbox_deleted_product_ids', JSON.stringify(list));
+      }
+      const localProducts = localStorage.getItem('farmerbox_products');
+      if (localProducts) {
+        const parsed = JSON.parse(localProducts);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((p: any) => String(p.id) !== '1791712614788');
+          localStorage.setItem('farmerbox_products', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+    deleteRecord('products', '1791712614788');
+    deleteRecord('products', 1791712614788);
 
     // Live Wallet Transactions Listener
     const unsubWalletTx = subscribeToCollection<WalletTransaction>('walletTransactions', (txList) => {
@@ -807,9 +852,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubProducts = subscribeToCollection<Product>('products', (p) => {
-      if (p && p.length > 0) {
+      if (p) {
+        const cleaned = deduplicateProducts(p);
         const initialMap = new Map(initialProductsList.map(item => [item.id, item]));
-        const normalized = p.map(item => {
+        const normalized = cleaned.map(item => {
           const initialMatch = initialMap.get(item.id);
           const nameLower = (item.name || '').toLowerCase();
           const unitLower = (item.unit || '').toLowerCase();
@@ -844,19 +890,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, handleErr);
 
     const unsubNotifs = subscribeToCollection<any>('notifications', (rawNotifs) => {
-      if (rawNotifs && rawNotifs.length > 0) {
-        const normalized: NotificationItem[] = rawNotifs.map((n: any) => ({
+      if (rawNotifs) {
+        let deletedIds = new Set<string>();
+        try {
+          const stored = localStorage.getItem('farmerbox_deleted_notif_ids');
+          if (stored) deletedIds = new Set(JSON.parse(stored));
+        } catch {}
+
+        const filtered = rawNotifs.filter((n: any) => {
+          const idStr = String(n.id !== undefined && n.id !== null ? n.id : '');
+          return idStr && !deletedIds.has(idStr);
+        });
+
+        const normalized: NotificationItem[] = filtered.map((n: any) => ({
+          ...n,
           id: n.id !== undefined && n.id !== null ? n.id : Date.now(),
           title: n.title || 'Notification',
           message: n.message || n.subtitle || 'No details provided',
           subtitle: n.subtitle || n.message || '',
           userType: n.userType || n.category || 'All Users',
           status: n.status || 'Sent',
-          dateTime: n.dateTime || n.time || new Date().toLocaleString(),
+          dateTime: n.dateTime || n.time || new Date().toLocaleString('en-IN'),
           time: n.time || n.dateTime || 'Just now',
           read: Boolean(n.read),
           category: n.category || 'System',
-          iconType: n.iconType || 'system'
+          iconType: n.iconType || 'system',
+          hasUpdateFile: Boolean(n.hasUpdateFile || n.isAppUpdate),
+          isAppUpdate: Boolean(n.isAppUpdate || n.hasUpdateFile),
+          fileName: n.fileName,
+          version: n.version
         }));
         setNotifications(normalized);
       }
@@ -1107,18 +1169,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const markNotificationAsRead = (id: number | string) => {
-    const target = notifications.find(n => String(n.id) === String(id));
+    const idStr = String(id);
+    const target = notifications.find(n => String(n.id) === idStr);
     if (target && !target.read) {
-      saveRecord('notifications', { ...target, read: true }, String(target.id));
+      saveRecord('notifications', { ...target, read: true }, idStr);
     }
-    setNotifications(prev => prev.map(n => (String(n.id) === String(id) ? { ...n, read: true } : n)));
+    setNotifications(prev => prev.map(n => (String(n.id) === idStr ? { ...n, read: true } : n)));
+  };
+
+  const toggleNotificationRead = (id: number | string) => {
+    const idStr = String(id);
+    const target = notifications.find(n => String(n.id) === idStr);
+    if (target) {
+      const nextRead = !target.read;
+      saveRecord('notifications', { ...target, read: nextRead }, idStr);
+      setNotifications(prev => prev.map(n => (String(n.id) === idStr ? { ...n, read: nextRead } : n)));
+    }
   };
 
   const clearAllNotifications = () => {
-    notifications.forEach(n => {
+    try {
+      const allIds = notifications.map(n => String(n.id));
+      const stored = localStorage.getItem('farmerbox_deleted_notif_ids');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      allIds.forEach(idStr => {
+        if (!list.includes(idStr)) list.push(idStr);
+      });
+      localStorage.setItem('farmerbox_deleted_notif_ids', JSON.stringify(list));
+      localStorage.removeItem('farmerbox_notifications');
+    } catch {}
+
+    const notifsToDelete = [...notifications];
+    setNotifications([]);
+    notifsToDelete.forEach(n => {
       deleteRecord('notifications', n.id);
     });
-    setNotifications([]);
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
@@ -2067,9 +2152,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteProduct = async (productId: number | string) => {
-    setProducts(prev => prev.filter(p => String(p.id) !== String(productId)));
-    if (selectedProduct && String(selectedProduct.id) === String(productId)) {
-      const remaining = products.filter(p => String(p.id) !== String(productId));
+    const idStr = String(productId);
+    try {
+      const stored = localStorage.getItem('farmerbox_deleted_product_ids');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      if (!list.includes(idStr)) {
+        list.push(idStr);
+        localStorage.setItem('farmerbox_deleted_product_ids', JSON.stringify(list));
+      }
+
+      const localProducts = localStorage.getItem('farmerbox_products');
+      if (localProducts) {
+        const parsed = JSON.parse(localProducts);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((p: any) => String(p.id) !== idStr);
+          localStorage.setItem('farmerbox_products', JSON.stringify(filtered));
+        }
+      }
+    } catch {}
+
+    setProducts(prev => prev.filter(p => String(p.id) !== idStr));
+    if (selectedProduct && String(selectedProduct.id) === idStr) {
+      const remaining = products.filter(p => String(p.id) !== idStr);
       setSelectedProduct(remaining.length > 0 ? remaining[0] : null);
     }
     try {
@@ -2291,7 +2395,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteNotification = async (id: number | string) => {
-    setNotifications(prev => prev.filter(n => String(n.id) !== String(id)));
+    const idStr = String(id);
+    try {
+      const stored = localStorage.getItem('farmerbox_deleted_notif_ids');
+      const list: string[] = stored ? JSON.parse(stored) : [];
+      if (!list.includes(idStr)) {
+        list.push(idStr);
+        localStorage.setItem('farmerbox_deleted_notif_ids', JSON.stringify(list));
+      }
+    } catch {}
+
+    setNotifications(prev => prev.filter(n => String(n.id) !== idStr));
     try {
       await deleteRecord('notifications', id);
     } catch (e) {
@@ -2365,6 +2479,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateAdminProfile,
         markNotificationsAsRead,
         markNotificationAsRead,
+        toggleNotificationRead,
         clearAllNotifications,
         updateOrderStatus,
         acceptOrder,

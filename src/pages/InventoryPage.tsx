@@ -516,8 +516,8 @@ export const InventoryPage: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-slate-400">
-                              SKU #{p.id}
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              {p.unit}
                             </span>
                           </div>
                         </div>
@@ -729,8 +729,10 @@ export const InventoryPage: React.FC = () => {
                   <h2 className="font-black text-2xl text-slate-900 tracking-tight">
                     {drawerProduct.name}
                   </h2>
-                  <p className="text-xs text-slate-400 mt-1 font-semibold">
-                    SKU #{drawerProduct.id} • {drawerProduct.category}
+                  <p className="text-xs text-slate-500 mt-1 font-semibold flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700">{drawerProduct.category}</span>
+                    <span>•</span>
+                    <span>Unit: {drawerProduct.unit}</span>
                   </p>
                   <p className="text-sm text-slate-600 mt-3 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                     {drawerProduct.description || `Fresh produce sourced directly for hotels and retail customers.`}
