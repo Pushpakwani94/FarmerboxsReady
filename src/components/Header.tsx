@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Bell, Menu, Calendar, X, Building2, ShoppingBag, Users, LogOut, ChevronDown, User, Settings, ShieldCheck } from 'lucide-react';
+import { Search, Bell, Menu, Calendar, X, Building2, ShoppingBag, Users, LogOut, ChevronDown, User, Settings, ShieldCheck, Smartphone, Download } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const Header: React.FC = () => {
   const {
     setIsNotificationsOpen,
+    isApkModalOpen,
+    setIsApkModalOpen,
     activeTab,
     setActiveTab,
     hotels,
@@ -194,6 +196,16 @@ export const Header: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Get Android APK Button */}
+        <button
+          onClick={() => setIsApkModalOpen(true)}
+          className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+          title="FarmerBox Joiner Android APK & iOS Packages"
+        >
+          <Smartphone className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Get APK</span>
+        </button>
 
         {/* Notification Bell */}
         <button

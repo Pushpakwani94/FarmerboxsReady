@@ -101,6 +101,8 @@ interface AppContextType {
   setIsAddProductOpen: (open: boolean) => void;
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: (open: boolean) => void;
+  isApkModalOpen: boolean;
+  setIsApkModalOpen: (open: boolean) => void;
   isOrderDetailModalOpen: boolean;
   setIsOrderDetailModalOpen: (open: boolean) => void;
   isAdminProfileOpen: boolean;
@@ -980,6 +982,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAddDriverOpen, setIsAddDriverOpen] = useState(false);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
   const [isAdminProfileOpen, setIsAdminProfileOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
@@ -2463,6 +2466,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAddProductOpen,
         isNotificationsOpen,
         setIsNotificationsOpen,
+        isApkModalOpen,
+        setIsApkModalOpen,
         isOrderDetailModalOpen,
         setIsOrderDetailModalOpen,
         isAdminProfileOpen,

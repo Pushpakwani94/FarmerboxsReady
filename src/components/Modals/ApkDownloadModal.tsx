@@ -199,28 +199,60 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
           {/* TAB 1: Direct Download */}
           {activeTab === 'download' && (
             <div className="space-y-4">
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-green-50/60 border border-emerald-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Card 1: FarmerBox.apk (Ultra-Lightweight Build) */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-green-50/70 border border-emerald-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wide">
-                      Latest Official Build Available
+                      ⚡ Ultra-Lightweight Shell APK (Latest Build)
                     </span>
                   </div>
                   <h4 className="text-base font-black text-slate-900">
-                    farmerbox-joiner-v2.4.1.apk
+                    FarmerBox.apk
                   </h4>
                   <p className="text-xs text-slate-600">
-                    Release v2.4.1 • Size: <strong>24.8 MB</strong> • Build #42 • Android 8.0+
+                    Size: <strong>12.6 KB</strong> • Android 8.0 to 15 • Direct Live Dev Sync • Ready for USB install
+                  </p>
+                  <p className="text-[11px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded inline-block mt-1">
+                    Path: public\FarmerBox.apk
                   </p>
                 </div>
 
                 <button
-                  onClick={() => triggerDirectDownload(apkFileName)}
-                  className="px-6 py-3 bg-[#15803d] hover:bg-[#166534] text-white text-sm font-extrabold rounded-xl shadow-lg shadow-emerald-700/20 hover:shadow-emerald-700/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5 cursor-pointer shrink-0"
+                  onClick={() => triggerDirectDownload('FarmerBox.apk')}
+                  className="px-5 py-2.5 bg-[#15803d] hover:bg-[#166534] text-white text-xs font-black rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-emerald-700/30 flex items-center gap-2 transition-all cursor-pointer shrink-0"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download APK Now</span>
+                  <span>Download FarmerBox.apk</span>
+                </button>
+              </div>
+
+              {/* Card 2: farmerbox-joiner-v2.5.0.apk (Full Standalone Build) */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-slate-100/60 border border-slate-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                      📦 Full Standalone Production Build
+                    </span>
+                  </div>
+                  <h4 className="text-base font-black text-slate-900">
+                    farmerbox-joiner-v2.5.0.apk
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    Release v2.5.0 • Size: <strong>134 MB</strong> • Bundled Offline Assets • Signed Keystore
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded inline-block mt-1">
+                    Path: public\farmerbox-joiner-v2.5.0.apk
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => triggerDirectDownload('farmerbox-joiner-v2.5.0.apk')}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download v2.5.0 APK</span>
                 </button>
               </div>
 

@@ -30,13 +30,14 @@ import { NotificationsDrawer } from './components/Modals/NotificationsDrawer';
 import { AdminProfileModal } from './components/AdminProfileModal';
 import { LogoutConfirmModal } from './components/Modals/LogoutConfirmModal';
 import { ConfirmModal } from './components/Modals/ConfirmModal';
+import { ApkDownloadModal } from './components/Modals/ApkDownloadModal';
 
 import { Capacitor } from '@capacitor/core';
 import { StandaloneMobileApp } from './mobileApp/StandaloneMobileApp';
 import { SplashScreen } from './components/SplashScreen';
 
 const MainContent: React.FC = () => {
-  const { activeTab, setActiveTab, toggleMobileMenu, confirmModal, closeConfirmModal, adminProfile } = useApp();
+  const { activeTab, setActiveTab, toggleMobileMenu, confirmModal, closeConfirmModal, adminProfile, isApkModalOpen, setIsApkModalOpen } = useApp();
   const isSuperAdmin = !adminProfile?.role || adminProfile.role.toLowerCase().includes('super') || adminProfile.role.toLowerCase().includes('owner');
 
   const renderTab = () => {
@@ -176,6 +177,10 @@ const MainContent: React.FC = () => {
       <NotificationsDrawer />
       <AdminProfileModal />
       <LogoutConfirmModal />
+      <ApkDownloadModal
+        isOpen={isApkModalOpen}
+        onClose={() => setIsApkModalOpen(false)}
+      />
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
