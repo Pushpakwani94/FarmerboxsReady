@@ -199,7 +199,7 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
           {/* TAB 1: Direct Download */}
           {activeTab === 'download' && (
             <div className="space-y-4">
-              {/* Card 1: FarmerBox.apk (Ultra-Lightweight Build) */}
+              {/* Card 1: farmerbox.apk (Ultra-Lightweight Build) */}
               <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-green-50/70 border border-emerald-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-2">
@@ -209,22 +209,22 @@ export const ApkDownloadModal: React.FC<ApkDownloadModalProps> = ({ isOpen, onCl
                     </span>
                   </div>
                   <h4 className="text-base font-black text-slate-900">
-                    FarmerBox.apk
+                    farmerbox.apk
                   </h4>
                   <p className="text-xs text-slate-600">
                     Size: <strong>12.6 KB</strong> • Android 8.0 to 15 • Direct Live Dev Sync • Ready for USB install
                   </p>
                   <p className="text-[11px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded inline-block mt-1">
-                    Path: public\FarmerBox.apk
+                    Path: public\farmerbox.apk
                   </p>
                 </div>
 
                 <button
-                  onClick={() => triggerDirectDownload('FarmerBox.apk')}
+                  onClick={() => triggerDirectDownload('farmerbox.apk')}
                   className="px-5 py-2.5 bg-[#15803d] hover:bg-[#166534] text-white text-xs font-black rounded-xl shadow-md shadow-emerald-700/20 hover:shadow-emerald-700/30 flex items-center gap-2 transition-all cursor-pointer shrink-0"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download FarmerBox.apk</span>
+                  <span>Download farmerbox.apk</span>
                 </button>
               </div>
 

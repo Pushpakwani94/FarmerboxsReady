@@ -139,11 +139,14 @@ $keystore = "$workDir\debug.keystore"
 if (Test-Path $keystore) { Remove-Item $keystore }
 & keytool -genkeypair -v -keystore $keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=FarmerBox, OU=Mobile, O=FarmerBox, L=Pune, ST=Maharashtra, C=IN"
 
-$finalApk = "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\public\FarmerBox.apk"
+$finalApk = "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\public\farmerbox.apk"
 & cmd.exe /c "$apksigner sign --ks `"$keystore`" --ks-pass pass:android --key-pass pass:android --out `"$finalApk`" `"$workDir\bin\aligned.apk`""
 if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
 
-Write-Host "=== Ultra-Lightweight APK Successfully Built ==="
+# Mirror to root farmerbox.apk
+Copy-Item -Force $finalApk "d:\Canary-All-Project\FinalFarmerBox\FarmerBoxAdminPanel\farmerbox.apk"
+
+Write-Host "=== Ultra-Lightweight APK Successfully Built: farmerbox.apk ==="
 Get-Item $finalApk | Select-Object Name, Length, LastWriteTime
 
 Write-Host "=== Checking Connected Device & Installing via USB ==="
